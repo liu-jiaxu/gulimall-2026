@@ -1,0 +1,36 @@
+# ============================================================
+# renren-fast 模块私有配置（后台管理端 / gulimall_admin 库）
+# 注意：renren-fast 用的是 Druid 数据源，配置键跟 gulimall-* 那套不一样
+#（在 spring.datasource.druid.* 下），但引用的还是同一批 ${MYSQL_*} 变量。
+# ============================================================
+
+# ---------- MySQL ----------
+MYSQL_HOST: <your-vm-host-ip>
+MYSQL_PORT: 3306
+MYSQL_USERNAME: root
+MYSQL_PASSWORD: <your-password>
+DB_NAME: gulimall_admin
+
+# ---------- Nacos ----------
+# ⚠️ 本模块的 application.yml 已经不导入 common.yaml 了，而 Nacos 的地址原本只定义在那里，
+#    所以这里必须自己再留一份。少了它就会退回默认的 localhost:8848，连不上真实注册中心
+#    → 注册失败 → 网关 lb://renren-fast 查不到实例 → 前端（走网关）503、验证码图片裂开。
+NACOS_ADDR: <your-vm-host-ip>:8848
+NACOS_USERNAME: nacos
+NACOS_PASSWORD: <your-password>
+
+spring:
+  cloud:
+    nacos:
+      server-addr: ${NACOS_ADDR}
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+      # 服务注册：网关就是靠这份实例列表做 lb:// 负载均衡的
+      discovery:
+        enabled: true
+        username: ${NACOS_USERNAME}
+        password: ${NACOS_PASSWORD}
+      # 后台管理端的配置全在这几个本地 yaml 里，不读 Nacos 配置中心
+      config:
+        enabled: false
+

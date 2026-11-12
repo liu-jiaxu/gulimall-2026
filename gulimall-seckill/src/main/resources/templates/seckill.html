@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>秒杀专场 - 谷粒商城</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Microsoft YaHei", Arial, sans-serif; background: #f5f5f5; color: #333; }
+        header { background: #e1251b; color: #fff; padding: 18px 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .brand { display: flex; align-items: center; gap: 16px; color: #fff; text-decoration: none; }
+        .brand h1 { margin: 0; font-size: 26px; color: #fff; }
+        .brand span { font-size: 14px; opacity: .9; }
+        .user-area { display: flex; align-items: center; gap: 18px; font-size: 14px; }
+        .user-area a { color: #fff; text-decoration: none; }
+        .user-area a:hover { text-decoration: underline; }
+        .user-area b { font-weight: 600; }
+        main { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+        .empty { background: #fff; padding: 60px; text-align: center; color: #999; border-radius: 8px; }
+        .session { background: #fff; border-radius: 8px; margin-bottom: 24px; overflow: hidden; }
+        .session-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #f0f0f0; }
+        .session-title { font-size: 18px; font-weight: 600; }
+        .countdown { color: #e1251b; font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; padding: 20px; }
+        .card { display: block; text-decoration: none; color: inherit; border: 1px solid #f0f0f0; border-radius: 6px; padding: 12px; transition: box-shadow .2s; }
+        .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+        .card img { width: 100%; height: 160px; object-fit: contain; background: #fafafa; }
+        .name { height: 42px; overflow: hidden; margin: 10px 0 6px; font-size: 14px; line-height: 1.5; }
+        .price b { color: #e1251b; font-size: 22px; }
+        .price s { color: #999; margin-left: 8px; font-size: 13px; }
+        .limit { color: #999; font-size: 12px; margin-top: 6px; }
+        .ended { color: #999; }
+    </style>
+</head>
+<body>
+<header>
+    <!-- 左上角：回主页 -->
+    <a class="brand" th:href="${shopHomeUrl}">
+        <h1>秒杀</h1>
+        <span>总有你想不到的低价</span>
+    </a>
+    <!-- 右上角：登录/会员信息，参照主页 -->
+    <div class="user-area">
+        <a th:href="${shopHomeUrl}">返回主页</a>
+        <th:block th:if="${loginUser == null}">
+            <a th:href="|${authUrl}/login.html|">登录</a>
+            <a th:href="|${authUrl}/reg.html|">注册</a>
+        </th:block>
+        <th:block th:if="${loginUser != null}">
+            <span>你好，<b th:text="${loginUser.nickname != null ? loginUser.nickname : loginUser.username}">会员</b></span>
+            <a th:href="|${authUrl}/logout.html|">退出登录</a>
+        </th:block>
+    </div>
+</header>
+<main>
+    <div class="empty" th:if="${#lists.isEmpty(sessions)}">暂无秒杀场次，请稍后再来</div>
+
+    <section class="session" th:each="s : ${sessions}">
+        <div class="session-head">
+            <div class="session-title" th:text="${s.sessionName}">场次</div>
+            <div class="countdown"
+                 th:attr="data-end=${s.endTime},data-start=${s.startTime},data-state=${s.state}">--:--:--</div>
+        </div>
+        <div class="grid">
+            <a class="card" th:each="sku : ${s.skus}"
+               th:href="${itemUrl + '/item.html?skuId=' + sku.skuId + '&seckillSessionId=' + s.sessionId}">
+                <img th:src="${sku.skuImg}" alt="">
+                <div class="name" th:text="${sku.skuName}">商品名称</div>
+                <div class="price">
+                    <b th:text="'¥' + ${#numbers.formatDecimal(sku.seckillPrice, 1, 2)}">0.00</b>
+                    <s th:text="'¥' + ${#numbers.formatDecimal(sku.skuPrice, 1, 2)}">0.00</s>
+                </div>
+                <div class="limit" th:text="'每人限购 ' + ${sku.seckillLimit} + ' 件'">每人限购 1 件</div>
+            </a>
+        </div>
+    </section>
+</main>
+
+<script>
+    (function () {
+        function pad(n) {
+            return String(n).padStart(2, '0');
+        }
+        function format(left) {
+            left = Math.max(left, 0);
+            const days = Math.floor(left / 86400000);
+            const time = pad(Math.floor((left % 86400000) / 3600000)) + ':'
+                + pad(Math.floor((left % 3600000) / 60000)) + ':'
+                + pad(Math.floor((left % 60000) / 1000));
+            if (days >= 365) {
+                return '长期有效';
+            }
+            return days >= 1 ? days + '天 ' + time : time;
+        }
+        document.querySelectorAll('.countdown').forEach(function (el) {
+            const end = parseInt(el.dataset.end || '0');
+            const start = parseInt(el.dataset.start || '0');
+            const state = parseInt(el.dataset.state || '0');
+            // 进行中倒计时到结束，未开始倒计时到开始
+            const target = state === 1 ? end : start;
+            function tick() {
+                el.textContent = (state === 1 ? '距结束 ' : '距开始 ') + format(target - Date.now());
+            }
+            tick();
+            setInterval(tick, 1000);
+        });
+    })();
+</script>
+    <!-- 谷粒商城 AI 助手：悬浮宠物 + 聊天窗 -->
+    <script src="/gulimall/agent/widget/chat-widget.js" defer></script>
+</body>
+</html>

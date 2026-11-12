@@ -1,0 +1,33 @@
+# ============================================================
+# gulimall-search 模块私有配置（商品检索）
+# 共用部分（含 ES 连接信息）见同目录 common.yaml
+# ------------------------------------------------------------
+# ES 的地址和密码原来放在 Nacos 的 gulimall-search.yaml 里 ——
+# 那里面有 IP 和明文密码
+# 但它是"共用中间件连接信息"，和 MySQL/Redis 同类，
+# 所以统一放 common.yaml（ES_URIS / ES_USERNAME / ES_PASSWORD），
+# 这里是 search 自己独有的东西。
+# ============================================================
+
+server:
+  port: 12000
+
+spring:
+  # Nacos配置
+  cloud:
+    nacos:
+      # 配置管理
+      config:
+        # Nacos 配置中心的命名空间（ID）
+        namespace: 78396d11-79dc-4bfe-a05c-bbf0c7a30030
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  session:
+    timeout: 7d
+    redis:
+      namespace: ${SESSION_REDIS_NAMESPACE}

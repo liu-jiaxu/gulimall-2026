@@ -1,0 +1,12 @@
+[
+  {
+    "resource": "seckillSkuInfo",
+    "paramIdx": 1,
+    "count": 20,
+    "grade": 1,
+    "durationInSec": 1,
+    "controlBehavior": 0,
+    "maxQueueingTimeMs": 0,
+    "paramFlowItemList": []
+  }
+]

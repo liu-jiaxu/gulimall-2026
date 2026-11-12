@@ -1,0 +1,281 @@
+# ============================================================
+# 网关路由配置（application-gateway.yaml）
+# 所有网关配置统一放本文件，后期可整份上传到 Nacos 的 application-gateway.yaml dataId。
+#
+# 五个微服务统一使用「虚拟前缀 gulimall + StripPrefix=1」方案，各路由的差异点：
+#   coupon  短写法 + 自定义 Token 断言 + AddRequestHeader（Predicate 自定义模式）
+#   member  全写法（predicates/filters 用 name/args）
+#   order   短写法
+#   product 短写法 + Query 参数断言
+#   ware    短写法 + Method 断言
+#
+# 注意：
+#   1. 本项目是 WebFlux 版网关(spring-cloud-starter-gateway 4.3.x)，
+#      Gateway 4.3 起 WebFlux 版前缀为 spring.cloud.gateway.server.webflux.*
+#      （旧前缀 spring.cloud.gateway.* 已被弃用，继续用会报警告）
+#   2. 访问 url 统一带一层虚拟前缀 gulimall（如 /gulimall/coupon/**），由 StripPrefix=1
+#      在转发前去掉 gulimall，还原成后端路径。后端 controller 类级路径都是「模块/实体」
+#      双前缀（如 CouponController = @RequestMapping("coupon/coupon")），完整路径
+#      coupon/coupon/list。
+#      注意：StripPrefix=1 只能去网关自己加的虚拟段 gulimall，绝不能去后端的 coupon 段，
+#      否则剩 /coupon/list 匹配不上 coupon/coupon/list → 404！
+# ============================================================
+
+# ============================================================
+# 测试 URL 速查（前提：网关 + 目标微服务都已启动并注册 Nacos；网关端口 88）
+# 通用流程：Path=/gulimall/xxx/** 匹配 → 断言通过 → StripPrefix=1 去掉 gulimall
+#           → 负载均衡转发到后端 /xxx/...
+# 通用结果：200=命中并返回数据；404=断言不满足；503=微服务未启动
+# ------------------------------------------------------------------
+# 1) coupon 优惠券列表（需带 X-Token 请求头，Token 断言要求）
+#    GET http://localhost:88/gulimall/coupon/coupon/list?page=1&limit=10
+#    → 200：Path + Token 断言通过，StripPrefix 后 /coupon/coupon/list 命中
+#    → 404：不带 X-Token 头（Token 断言拦截）
+#    → 503：coupon 服务未启动（lb://gulimall-coupon 无可用实例）
+#
+# 2) member 会员列表（全写法路由）
+#    GET http://localhost:88/gulimall/member/member/list?page=1&limit=10
+#    → 200：StripPrefix 后 /member/member/list 命中
+#    → 503：member 服务未启动
+#
+# 3) order 订单列表（短写法路由）
+#    GET http://localhost:88/order/order/list?page=1&limit=10
+#    → 200：转发到 /order/order/list
+#    → 503：order 服务未启动
+#
+# 4) product 品牌列表（Query=sku 断言要求 URL 必须带 sku 参数）
+#    GET http://localhost:88/gulimall/product/brand/list?page=1&limit=10&sku=1
+#    → 200：Path + Query(sku) 断言通过，StripPrefix 后 /product/brand/list 命中
+#    → 404：URL 不带 sku 参数（Query 断言拦截，演示用，实际可删掉该断言）
+#    → 503：product 服务未启动
+#
+# 5) ware 仓库列表（Method=GET,POST 断言）
+#    GET http://localhost:88/gulimall/ware/wareinfo/list?page=1&limit=10
+#    → 200：GET 方法 + Path 匹配，StripPrefix 后 /ware/wareinfo/list 命中
+#    → 503：ware 服务未启动
+#
+# 附加：若在业务模块开启了 common 的 shiro 拦截（gulimall.shiro.enabled=true），
+#      上述 list 接口因带 @RequiresPermissions("xxx:list") 会返回 401/403；默认不开启则正常 200。
+# ============================================================
+
+# ============================================================
+# 完整执行流程示例 —— coupon 接口（虚拟前缀 + StripPrefix 方案）：
+#   GET http://localhost:88/gulimall/coupon/coupon/list?page=1&limit=10
+#   请求头需带 X-Token: abc
+#
+#   ① 请求到达网关 88 端口（WebFlux 响应式管线）
+#   ② 全局 CORS 处理：允许任意 Origin/Header/Method，直接放行
+#   ③ RtGlobalFilter 全局过滤器（order=0，最先执行）：
+#        记录 uri=/gulimall/coupon/coupon/list、start 时间
+#   ④ 路由匹配（按 order 从小到大依次尝试，匹配到即转发、不再向下）：
+#        coupon-route(order=0)
+#          · Path=/gulimall/coupon/**  →  /gulimall/coupon/coupon/list 命中 ✓
+#          · Token=X-Token            →  自定义断言(见 TokenRoutePredicateFactory)
+#                                        检查请求头 X-Token 存在 ✓
+#        全部断言通过 → 选中 coupon-route
+#        若不带 X-Token 头 → Token 断言失败 → 无路由命中 → 404
+#   ⑤ 过滤器执行（按声明顺序）：
+#        StripPrefix=1                     → 去掉第一段 gulimall，路径变 /coupon/coupon/list
+#        AddRequestHeader=X-From, gateway  → 转发时给后端请求加头 X-From=gateway
+#   ⑥ 负载均衡：uri=lb://gulimall-coupon，LoadBalancer 从 Nacos 注册中心
+#        选择一个 gulimall-coupon 实例
+#        Nacos 中无该服务实例 → 503
+#   ⑦ 转发：把 /coupon/coupon/list 转发到选中实例
+#   ⑧ 后端处理：CouponController 类级 @RequestMapping("coupon/coupon")
+#        + 方法 @RequestMapping("/list") = coupon/coupon/list
+#        → couponService.queryPage(params) 分页查询数据库
+#        → 返回 R.ok().put("page", page)（JSON）
+#   ⑨ 响应回程：RtGlobalFilter 的 doFinally 回调打印 end/cost 耗时，
+#        响应经 CORS 头返回客户端
+# ============================================================
+
+# Gateway保证用户访问微服务时的负载均衡，Openfeign保证微服务间访问的负载均衡
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # ============================================================
+          # 全局 CORS（跨域）
+          # ------------------------------------------------------------
+          # CORS 是浏览器的同源策略机制，只约束【浏览器】发起的跨域请求；
+          # curl / Postman / 后端服务之间不受它限制。
+          # 全部放开("*")只适合开发调试：生产若放开，任何恶意网站都能在
+          # 用户浏览器里跨域调用本网关接口（配合 Cookie 登录态可构成 CSRF 风险）。
+          #
+          # 推荐做法（下方已按此配置）：
+          #   1) allowed-origin-patterns：只放行前端的域名/端口白名单
+          #      支持通配模式（如 "https://*.example.com"），注意改成本地实际端口
+          #   2) allowed-methods：只放行业务需要的方法
+          #   3) allowed-headers：只放行前端会带的请求头
+          # 开发调试时可临时改回 ["*"]（见被注释掉的那行），上生产前务必收窄。
+          # 注意：一旦开 allow-credentials: true（允许携带 Cookie 登录态），
+          #       origin 就不能配 "*"，必须写具体域名。
+          # ============================================================
+
+          # SSE/长回答：默认响应超时太短，AI 流式会被网关提前断开
+          httpclient:
+            response-timeout: 300s
+
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origin-patterns: [ "*" ]     # 开发调试临时放开
+                #                allowed-origin-patterns:
+                #                  - "http://localhost:8001"       # 后台管理 renren-fast-vue（前端）
+                #                  - "http://localhost:3000"       # 商城前端（按实际端口改）
+                #                  - "http://localhost:8080"       # 其它前端（按实际端口改）
+                allowed-headers:
+                  # 开发阶段放行全部请求头；生产按需收窄，例如：
+                  #   - X-Token        （网关 Token 断言要求的头）
+                  #   - Content-Type / Authorization 等业务头
+                  - "*"
+                allowed-methods:
+                  - "GET"
+                  - "POST"
+                  - "PUT"
+                  - "DELETE"
+                  - "OPTIONS"
+                allow-credentials: true             # 允许携带 Cookie 登录态（renren-fast-vue 登录 withCredentials=true 必需）
+          routes:
+            # ---------- coupon：短写法 + 自定义 Token 断言 ----------
+            - id: coupon-route
+              uri: lb://gulimall-coupon             # lb:// 走 Nacos 负载均衡
+              predicates:
+                - Path=/gulimall/coupon/**          # 访问 /gulimall/coupon/** 转发到 coupon 服务
+              #                - Token=X-Token                     # 自定义断言：请求必须带 X-Token 请求头
+              # yaml配置文件全部写法：
+              # predicates:
+              #   - Token=X-Token                    # 短写法：请求头 X-Token 存在即可
+              #   - Token=X-Token,admin              # 短写法：请求头 X-Token 必须等于 admin
+              #   - name: Token                      # 全写法：请求头 X-Token 必须等于 admin
+              #     args:
+              #       headerName: X-Token
+              #       headerValue: admin
+              filters:
+                - StripPrefix=1                     # StripPrefix=1：转发前去掉第一段虚拟前缀 gulimall，还原后端路径
+                - AddRequestHeader=X-From, gateway  # 给后端请求添加来源标识头（演示 AddRequestHeader）
+              order: 0                              # 路由优先级，越小越先匹配
+            # 网关开启前后对比
+            # 开启前访问url：http://localhost:7000/coupon/coupon/list?page=1&limit=10
+            # 开启后访问url：http://localhost:88/gulimall/coupon/coupon/list?page=1&limit=10 + X-Token 请求头
+            #   - predicates匹配路径 + 请求头，匹配成功后再进行过滤判断
+            #   - filters去掉第一个前缀 gulimall，负载均衡转发到 coupon 服务的 /coupon/coupon/list，同时给后端请求添加请求头 X-From=gateway
+
+            # ---------- member：全写法（name/args） ----------
+            - id: member-route
+              uri: lb://gulimall-member
+              predicates:
+                - name: Path
+                  args:
+                    patterns: /gulimall/member/**
+                    matchTrailingSlash: true       # /gulimall/member/ 与 /gulimall/member 视为同路径
+              filters:
+                - StripPrefix=1                    # 去掉虚拟前缀 gulimall
+                - name: AddResponseHeader
+                  args:
+                    name: x-member
+                    value: member
+              order: 1
+
+            # ---------- order：短写法 ----------
+            - id: order-route
+              uri: lb://gulimall-order
+              predicates:
+                - Path=/gulimall/order/**
+              filters:
+                - StripPrefix=1                    # 去掉虚拟前缀 gulimall
+                - AddResponseHeader=x-order, order
+              order: 2
+
+            # ---------- product：短写法 + Query 参数断言 ----------
+            - id: product-route
+              uri: lb://gulimall-product
+              predicates:
+                - Path=/gulimall/product/**
+              #                - Query=sku                        # 必须带 sku 参数（演示 Query 断言，实际按需删除）
+              filters:
+                - StripPrefix=1                    # 去掉虚拟前缀 gulimall
+              order: 3
+
+            # ---------- ware：短写法 + Method 断言 ----------
+            - id: ware-route
+              uri: lb://gulimall-ware
+              predicates:
+                #                - Method=GET,POST                  # 仅 GET/POST 请求放行（演示 Method 断言）
+                - Path=/gulimall/ware/**
+              filters:
+                - StripPrefix=1                    # 去掉虚拟前缀 gulimall
+              order: 4
+
+            # --------- third-party第三方依赖minIO网关设置 ----------
+            - id: third_party_route
+              uri: lb://gulimall-third-party
+              predicates:
+                - Method=POST
+                - Path=/gulimall/thirdparty/**
+              filters:
+                - RewritePath=/gulimall/thirdparty/(?<segment>.*),/$\{segment}
+              order: 5
+
+            # ---------- seckill：秒杀场次/商品/抢购 ----------
+            - id: seckill-route
+              uri: lb://gulimall-seckill
+              predicates:
+               - Path=/gulimall/seckill/**
+              filters:
+               - StripPrefix=1                    # /gulimall/seckill/sessions -> /seckill/sessions
+              order: 6
+
+            # ---------- agent：AI 助手（聊天/SSE/图片/历史/设置/RAG） ----------
+            # /gulimall/agent/chat/stream -> /agent/chat/stream
+            # order 必须小于 admin_route 的 99，否则会被兜底路由抢走
+            - id: agent-route
+              uri: lb://gulimall-agent
+              predicates:
+                - Path=/gulimall/agent/**
+              filters:
+                - StripPrefix=1
+              order: 7
+
+             # search服务只有product远程调用，auth和cart会由nginx直连url，所以都不需要网关转发
+             # 只有请求来源是外部（前端页面、小程序等），才需要配置网关统一鉴权、限流、路由
+#            # --------- search搜索网关设置 ----------
+#            - id: search_route
+#              uri: lb://gulimall-search
+#              predicates:
+#                - Path=/gulimall/search/**
+#              filters:
+#                - RewritePath=/gulimall/search/(?<segment>.*),/$\{segment}
+#              order: 8
+#
+#            # --------- auth登录网关设置 ----------
+#            - id: auth_route
+#              uri: lb://gulimall-auth
+#              predicates:
+#                - Path=/gulimall/auth/**
+#              filters:
+#                - RewritePath=/gulimall/auth/(?<segment>.*),/$\{segment}
+#              order: 9
+#
+#            # --------- cart购物车网关设置 ---------
+#            - id: cart_route
+#              uri: lb://gulimall-cart
+#              predicates:
+#                - Path=/gulimall/cart/**
+#              filters:
+#                - RewritePath=/gulimall/cart/(?<segment>.*),/$\{segment}
+#              order: 10
+
+            - id: admin_route
+              uri: lb://renren-fast
+              predicates:
+                - Path=/gulimall/**    # 把所有gulimall开头的请求都转发给renren-fast
+              filters:
+                - RewritePath=/gulimall/(?<segment>.*),/renren-fast/$\{segment}
+                # 默认规则， 请求过来：http://localhost:88/gulimall/captcha.jpg   转发-->  http://renren-fast:8080/api/captcha.jpg
+                # 但是真正的路径是http://renren-fast:8080/renren-fast/captcha.jpg
+                # 所以使用路径重写把/gulimall/* 改变成 /renren-fast/*
+              # 必须给大 order 兜底：Gateway 未写 order 默认是 0，
+              # 会比 product-route(3) 等业务路由更优先，把 /gulimall/** 全兜到 renren-fast
+              order: 99

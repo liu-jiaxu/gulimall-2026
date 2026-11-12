@@ -1,0 +1,11 @@
+[
+  {
+    "resource": "seckillOrderSubmit",
+    "grade": 0,
+    "count": 800,
+    "timeWindow": 10,
+    "minRequestAmount": 10,
+    "statIntervalMs": 10000,
+    "slowRatioThreshold": 0.5
+  }
+]

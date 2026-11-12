@@ -1,0 +1,28 @@
+# ============================================================
+# Elasticsearch 8.18.8 服务端配置
+#
+# 挂载到容器内 /usr/share/elasticsearch/config/elasticsearch.yml
+#
+# ⚠️ 挂载是【覆盖】关系：镜像自带的同名文件会被本文件完全替换。
+#    官方镜像原本在里面预置了 network.host，所以下面必须显式写回来，
+#    否则容器的 9200 只在内部回环地址监听，宿主端口映射会失效（外部连不上）。
+#
+# ⚠️ 改完要 docker compose restart elasticsearch 才生效（ES 只在启动时读配置）
+#
+# ⚠️ 下面两项【只能】配在 compose 的 environment 里，写在本文件无效：
+#      ES_JAVA_OPTS       JVM 堆内存（-Xms / -Xmx）
+#      ELASTIC_PASSWORD   首次初始化 elastic 用户密码
+# ============================================================
+
+# 监听地址：监听容器内所有网卡，宿主的 9200 端口映射才能通
+network.host: 0.0.0.0
+
+# 单节点模式：免去集群发现配置；单机部署必配，否则 ES 启动失败
+discovery.type: single-node
+
+# 安全认证
+#   enabled: true  -> 开启 Basic Auth，账号 elastic，密码见 compose 的 ELASTIC_PASSWORD
+#   http.ssl.enabled: false -> 关闭 HTTP 层 SSL，客户端用 http + 账号密码即可连接，无需证书
+# 想彻底免认证（纯内网学习环境）：把 enabled 改成 false，并删掉 compose 里的 ELASTIC_PASSWORD
+xpack.security.enabled: true
+xpack.security.http.ssl.enabled: false

@@ -1,0 +1,973 @@
+/* ============================================================
+   谷粒商城 AI 助手 - 悬浮宠物 + 聊天窗
+   所有类名以 gl-ai- 开头，避免和商城页面现有样式冲突
+   ============================================================ */
+
+.gl-ai-root {
+    --gl-ai-primary: #e4393c;
+    --gl-ai-primary-soft: rgba(228, 57, 60, .10);
+    --gl-ai-bg: #ffffff;
+    --gl-ai-text: #1f2329;
+    --gl-ai-muted: #8a9099;
+    --gl-ai-border: #e8eaed;
+    --gl-ai-shadow: 0 16px 48px rgba(20, 24, 31, .18);
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    /* 1. 抬到页面所有弹层之上，避免首页右侧卡片把宠物盖住 */
+    z-index: 2147483000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.gl-ai-root * {
+    box-sizing: border-box;
+}
+
+/* 1. 面板、登录遮罩、弹层、停止按钮都自带 display:flex/inline-flex，
+      会覆盖浏览器默认的 [hidden] 隐藏效果 —— 必须强制隐藏，否则登录后仍看到“未登录”遮罩 */
+.gl-ai-root [hidden] {
+    display: none !important;
+}
+
+/* ---------- 宠物 ---------- */
+.gl-ai-pet {
+    position: fixed;
+    /* 1. 宠物再放大一档：168x182，保持精灵图 192x208 的比例，不拉伸 */
+    width: 168px;
+    height: 182px;
+    background-image: url("/gulimall/agent/widget/pet/xbb/spritesheet.webp");
+    background-repeat: no-repeat;
+    background-size: 1344px 2002px;
+    cursor: grab;
+    pointer-events: auto;
+    user-select: none;
+    touch-action: none;
+    filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .18));
+    transition: filter .2s ease;
+    z-index: 999998;
+}
+
+.gl-ai-pet:hover {
+    filter: drop-shadow(0 10px 16px rgba(228, 57, 60, .28));
+}
+
+.gl-ai-pet.gl-ai-dragging {
+    cursor: grabbing;
+    filter: drop-shadow(0 14px 18px rgba(0, 0, 0, .24));
+}
+
+/* 精灵图加载失败时的兜底：至少保留一个能点击的圆脑袋 */
+.gl-ai-pet.gl-ai-pet-fallback {
+    background-image: none !important;
+    background: var(--gl-ai-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 24px rgba(20, 24, 31, .24);
+}
+
+.gl-ai-pet.gl-ai-pet-fallback::after {
+    content: "🤖";
+    font-size: 74px;
+    line-height: 1;
+}
+
+.gl-ai-pet-tip {
+    position: fixed;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(31, 35, 41, .88);
+    color: #fff;
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity .2s ease, transform .2s ease;
+    z-index: 2147483001;
+    white-space: nowrap;
+}
+
+.gl-ai-pet-tip.gl-ai-show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ---------- 聊天面板 ---------- */
+.gl-ai-panel {
+    position: fixed;
+    right: 24px;
+    bottom: 160px;
+    width: 388px;
+    height: 580px;
+    max-height: calc(100vh - 190px);
+    border-radius: 18px;
+    background: var(--gl-ai-bg);
+    box-shadow: var(--gl-ai-shadow);
+    border: 1px solid var(--gl-ai-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    pointer-events: auto;
+    z-index: 999999;
+    animation: gl-ai-pop .18s ease-out;
+}
+
+.gl-ai-panel[hidden] {
+    display: none;
+}
+
+/* 左下角、右下角拖拽柄：左右都能调整聊天框大小 */
+.gl-ai-resize {
+    position: absolute;
+    bottom: 0;
+    width: 20px;
+    height: 20px;
+    z-index: 6;
+    touch-action: none;
+}
+
+.gl-ai-resize-sw {
+    left: 0;
+    cursor: nesw-resize;
+}
+
+.gl-ai-resize-se {
+    right: 0;
+    cursor: nwse-resize;
+}
+
+.gl-ai-resize::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    width: 8px;
+    height: 8px;
+    opacity: .45;
+}
+
+.gl-ai-resize-sw::after {
+    left: 4px;
+    border-left: 2px solid var(--gl-ai-muted);
+    border-bottom: 2px solid var(--gl-ai-muted);
+}
+
+.gl-ai-resize-se::after {
+    right: 4px;
+    border-right: 2px solid var(--gl-ai-muted);
+    border-bottom: 2px solid var(--gl-ai-muted);
+}
+
+@keyframes gl-ai-pop {
+    from { opacity: 0; transform: translateY(10px) scale(.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.gl-ai-header {
+    flex: 0 0 auto;
+    padding: 14px 16px 12px;
+    background: linear-gradient(135deg, var(--gl-ai-primary), color-mix(in srgb, var(--gl-ai-primary) 78%, #000));
+    color: #fff;
+}
+
+.gl-ai-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gl-ai-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .2px;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gl-ai-title small {
+    font-weight: 400;
+    opacity: .8;
+    font-size: 11px;
+    margin-left: 6px;
+}
+
+.gl-ai-icon-btn {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .16);
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+    transition: background .15s ease;
+}
+
+.gl-ai-icon-btn:hover {
+    background: rgba(255, 255, 255, .28);
+}
+
+.gl-ai-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.gl-ai-select {
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, .28);
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+    font-size: 12px;
+    padding: 0 8px;
+    outline: none;
+}
+
+.gl-ai-select option {
+    color: #1f2329;
+    background: #fff;
+}
+
+.gl-ai-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, .92);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+.gl-ai-switch input {
+    accent-color: #fff;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+/* ---------- 消息区 ---------- */
+.gl-ai-messages {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 14px 14px 8px;
+    background: #f7f8fa;
+    scroll-behavior: smooth;
+}
+
+.gl-ai-messages::-webkit-scrollbar,
+.gl-ai-history-list::-webkit-scrollbar,
+.gl-ai-settings-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.gl-ai-messages::-webkit-scrollbar-thumb,
+.gl-ai-history-list::-webkit-scrollbar-thumb,
+.gl-ai-settings-body::-webkit-scrollbar-thumb {
+    background: #d4d7dc;
+    border-radius: 6px;
+}
+
+.gl-ai-msg {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: flex-start;
+}
+
+.gl-ai-msg.gl-ai-user {
+    flex-direction: row-reverse;
+}
+
+/* 1. 气泡外层必须有宽度约束，否则中文会被挤成一列一个字 */
+.gl-ai-bubble-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    max-width: calc(100% - 34px);
+}
+
+.gl-ai-msg.gl-ai-user .gl-ai-bubble-wrap {
+    align-items: flex-end;
+}
+
+.gl-ai-avatar {
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    background: #fff;
+    border: 1px solid var(--gl-ai-border);
+}
+
+.gl-ai-msg.gl-ai-user .gl-ai-avatar {
+    background: var(--gl-ai-primary);
+    color: #fff;
+    border-color: transparent;
+}
+
+.gl-ai-bubble {
+    max-width: 100%;
+    width: fit-content;
+    padding: 9px 11px;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid var(--gl-ai-border);
+    color: var(--gl-ai-text);
+    font-size: 13px;
+    line-height: 1.65;
+    word-break: break-word;
+    box-shadow: 0 1px 2px rgba(20, 24, 31, .04);
+}
+
+.gl-ai-msg.gl-ai-user .gl-ai-bubble {
+    background: var(--gl-ai-primary);
+    border-color: transparent;
+    color: #fff;
+    border-top-right-radius: 4px;
+}
+
+.gl-ai-msg.gl-ai-assistant .gl-ai-bubble {
+    border-top-left-radius: 4px;
+}
+
+.gl-ai-bubble p {
+    margin: 0 0 6px;
+}
+
+.gl-ai-bubble p:last-child {
+    margin-bottom: 0;
+}
+
+.gl-ai-bubble pre {
+    margin: 8px 0;
+    padding: 9px 10px;
+    border-radius: 8px;
+    background: #12161d;
+    color: #e6edf3;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.gl-ai-bubble code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    background: rgba(120, 130, 145, .12);
+    padding: 1px 4px;
+    border-radius: 4px;
+}
+
+.gl-ai-bubble pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.gl-ai-msg.gl-ai-user .gl-ai-bubble code {
+    background: rgba(255, 255, 255, .2);
+}
+
+.gl-ai-bubble img {
+    max-width: 100%;
+    max-height: 220px;
+    border-radius: 8px;
+    display: block;
+    margin: 6px 0;
+    cursor: zoom-in;
+}
+
+.gl-ai-bubble a {
+    color: var(--gl-ai-primary);
+    text-decoration: underline;
+}
+
+.gl-ai-msg.gl-ai-user .gl-ai-bubble a {
+    color: #fff;
+}
+
+.gl-ai-images {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.gl-ai-images img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, .08);
+    cursor: zoom-in;
+}
+
+.gl-ai-time {
+    font-size: 10px;
+    color: var(--gl-ai-muted);
+    margin-top: 3px;
+}
+
+.gl-ai-msg.gl-ai-user .gl-ai-time {
+    color: rgba(255, 255, 255, .72);
+    text-align: right;
+}
+
+.gl-ai-typing {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+    height: 16px;
+}
+
+.gl-ai-typing span {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--gl-ai-muted);
+    animation: gl-ai-blink 1.1s infinite ease-in-out;
+}
+
+.gl-ai-typing span:nth-child(2) { animation-delay: .15s; }
+.gl-ai-typing span:nth-child(3) { animation-delay: .3s; }
+
+@keyframes gl-ai-blink {
+    0%, 80%, 100% { opacity: .25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-2px); }
+}
+
+.gl-ai-empty {
+    text-align: center;
+    color: var(--gl-ai-muted);
+    font-size: 12px;
+    padding: 28px 12px;
+    line-height: 1.8;
+}
+
+.gl-ai-empty strong {
+    display: block;
+    color: var(--gl-ai-text);
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+/* ---------- 输入区 ---------- */
+.gl-ai-composer {
+    flex: 0 0 auto;
+    border-top: 1px solid var(--gl-ai-border);
+    background: #fff;
+    padding: 8px 10px 10px;
+}
+
+.gl-ai-pending {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.gl-ai-chip {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--gl-ai-border);
+}
+
+.gl-ai-chip img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gl-ai-chip button {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 14px;
+    height: 14px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .55);
+    color: #fff;
+    font-size: 10px;
+    line-height: 14px;
+    padding: 0;
+    cursor: pointer;
+}
+
+.gl-ai-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    border: 1px solid var(--gl-ai-border);
+    border-radius: 12px;
+    padding: 6px 6px 6px 10px;
+    background: #fff;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.gl-ai-input-row:focus-within {
+    border-color: var(--gl-ai-primary);
+    box-shadow: 0 0 0 3px var(--gl-ai-primary-soft);
+}
+
+.gl-ai-input {
+    flex: 1;
+    min-height: 24px;
+    max-height: 96px;
+    border: 0;
+    outline: none;
+    resize: none;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--gl-ai-text);
+    background: transparent;
+    padding: 2px 0;
+    font-family: inherit;
+}
+
+.gl-ai-input::placeholder {
+    color: #a8adb5;
+}
+
+.gl-ai-composer-btn {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 9px;
+    background: #f0f2f5;
+    color: #5c636b;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex: 0 0 auto;
+}
+
+.gl-ai-composer-btn:hover {
+    background: #e7eaee;
+}
+
+.gl-ai-send {
+    background: var(--gl-ai-primary);
+    color: #fff;
+}
+
+.gl-ai-stop {
+    background: #fff1f0;
+    color: #e4393c;
+    border: 1px solid #ffccc7;
+    font-size: 12px;
+}
+
+.gl-ai-stop:hover {
+    background: #ffe7e6;
+}
+
+.gl-ai-send:hover {
+    filter: brightness(.94);
+    background: var(--gl-ai-primary);
+}
+
+.gl-ai-send:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.gl-ai-hint {
+    margin-top: 5px;
+    font-size: 10px;
+    color: var(--gl-ai-muted);
+    text-align: center;
+}
+
+/* ---------- 弹层（历史/设置） ---------- */
+.gl-ai-modal {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 20, 26, .42);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 5;
+}
+
+.gl-ai-modal[hidden] {
+    display: none;
+}
+
+.gl-ai-sheet {
+    width: 100%;
+    max-height: 86%;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    animation: gl-ai-sheet .18s ease-out;
+}
+
+@keyframes gl-ai-sheet {
+    from { transform: translateY(20px); opacity: .6; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.gl-ai-sheet-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--gl-ai-border);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gl-ai-text);
+}
+
+.gl-ai-sheet-header .gl-ai-icon-btn {
+    background: #f0f2f5;
+    color: #5c636b;
+}
+
+.gl-ai-sheet-header .gl-ai-icon-btn:hover {
+    background: #e7eaee;
+}
+
+.gl-ai-sheet-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px 14px;
+}
+
+.gl-ai-search-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.gl-ai-text-input {
+    flex: 1;
+    height: 32px;
+    border: 1px solid var(--gl-ai-border);
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 12px;
+    outline: none;
+    color: var(--gl-ai-text);
+}
+
+.gl-ai-text-input:focus {
+    border-color: var(--gl-ai-primary);
+}
+
+.gl-ai-small-btn {
+    height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--gl-ai-primary);
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.gl-ai-small-btn:hover {
+    filter: brightness(.94);
+}
+
+.gl-ai-small-btn.gl-ai-ghost {
+    background: #f0f2f5;
+    color: #4d545c;
+}
+
+.gl-ai-history-list,
+.gl-ai-custom-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gl-ai-history-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border: 1px solid var(--gl-ai-border);
+    border-radius: 10px;
+    cursor: pointer;
+    background: #fff;
+}
+
+.gl-ai-history-item:hover,
+.gl-ai-history-item.gl-ai-active {
+    border-color: var(--gl-ai-primary);
+    background: var(--gl-ai-primary-soft);
+}
+
+.gl-ai-history-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.gl-ai-history-title {
+    font-size: 13px;
+    color: var(--gl-ai-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gl-ai-history-meta {
+    font-size: 10px;
+    color: var(--gl-ai-muted);
+    margin-top: 2px;
+}
+
+.gl-ai-del {
+    border: 0;
+    background: transparent;
+    color: #b2b7bf;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+}
+
+.gl-ai-del:hover {
+    color: #e4393c;
+}
+
+.gl-ai-search-result {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #f7f8fa;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--gl-ai-text);
+    line-height: 1.6;
+    cursor: pointer;
+}
+
+.gl-ai-search-result small {
+    display: block;
+    color: var(--gl-ai-muted);
+    font-size: 10px;
+    margin-bottom: 2px;
+}
+
+/* ---------- 设置 ---------- */
+.gl-ai-field {
+    margin-bottom: 12px;
+}
+
+.gl-ai-field > label {
+    display: block;
+    font-size: 12px;
+    color: #4d545c;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.gl-ai-field input[type="text"],
+.gl-ai-field input[type="password"],
+.gl-ai-field input[type="url"],
+.gl-ai-field input[type="number"],
+.gl-ai-field textarea {
+    width: 100%;
+    border: 1px solid var(--gl-ai-border);
+    border-radius: 8px;
+    padding: 7px 9px;
+    font-size: 12px;
+    color: var(--gl-ai-text);
+    outline: none;
+    font-family: inherit;
+    background: #fff;
+}
+
+.gl-ai-field textarea {
+    min-height: 64px;
+    resize: vertical;
+}
+
+.gl-ai-field input:focus,
+.gl-ai-field textarea:focus {
+    border-color: var(--gl-ai-primary);
+}
+
+.gl-ai-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #4d545c;
+    margin-bottom: 8px;
+}
+
+.gl-ai-inline input[type="checkbox"] {
+    accent-color: var(--gl-ai-primary);
+}
+
+.gl-ai-colors {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.gl-ai-color-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--gl-ai-border);
+    cursor: pointer;
+}
+
+.gl-ai-color-dot.gl-ai-color-active {
+    box-shadow: 0 0 0 2px var(--gl-ai-primary);
+}
+
+.gl-ai-custom-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--gl-ai-border);
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.gl-ai-custom-item .gl-ai-custom-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gl-ai-custom-item small {
+    color: var(--gl-ai-muted);
+    font-size: 10px;
+}
+
+.gl-ai-divider {
+    height: 1px;
+    background: var(--gl-ai-border);
+    margin: 14px 0;
+}
+
+.gl-ai-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 40px;
+    transform: translateX(-50%) translateY(10px);
+    background: rgba(31, 35, 41, .9);
+    color: #fff;
+    font-size: 12px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+    z-index: 2147483003;
+}
+
+.gl-ai-toast.gl-ai-show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.gl-ai-login-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, .92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+    z-index: 4;
+}
+
+.gl-ai-login-mask strong {
+    font-size: 15px;
+    color: var(--gl-ai-text);
+}
+
+.gl-ai-login-mask p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--gl-ai-muted);
+    line-height: 1.6;
+}
+
+.gl-ai-login-hint {
+    color: #e4393c !important;
+    font-size: 11px !important;
+    max-width: 280px;
+}
+
+.gl-ai-login-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.gl-ai-login-mask a {
+    display: inline-block;
+    padding: 8px 18px;
+    border-radius: 999px;
+    background: var(--gl-ai-primary);
+    color: #fff;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.gl-ai-login-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: #f0f2f5;
+    color: #5c636b;
+}
+
+.gl-ai-login-close:hover {
+    background: #e7eaee;
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 560px) {
+    .gl-ai-panel {
+        right: 12px;
+        left: 12px;
+        width: auto;
+        bottom: 140px;
+        height: 68vh;
+        max-height: none;
+    }
+
+    .gl-ai-pet {
+        width: 128px;
+        height: 139px;
+        background-size: 1024px 1529px;
+    }
+}

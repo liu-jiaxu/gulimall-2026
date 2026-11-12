@@ -1,0 +1,299 @@
+# ============================================================
+# gulimall-agent 模块私有配置
+# ------------------------------------------------------------
+# 共用部分（MySQL/Redis/Nacos/MinIO/AI Key/Milvus）见 common.yaml
+# 所有密钥只写占位符，真实值放 config/common.yaml 或操作系统环境变量
+# ============================================================
+
+server:
+  # AI 服务端口；网关/Nginx 按这个端口转发
+  port: 15000
+
+spring:
+  datasource:
+    # MySQL 账号密码从 common.yaml/环境变量读取
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    # createDatabaseIfNotExist=true：首次启动自动建空库；表结构执行 sql/gulimall_ai.sql
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/gulimall_ai?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    # MySQL 8 用 cj 驱动
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      # Redis 存会话、模型记忆、图片任务和元数据
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  servlet:
+    multipart:
+      # 单张图片大小限制；业务层还会再校验一次 10MB
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+  mvc:
+    async:
+      # SSE 长连接：模型思考 + 工具调用可能超过 30 秒
+      request-timeout: 300000
+
+mybatis-plus:
+  global-config:
+    db-config:
+      # 逻辑删除：1 表示已删除，0 表示正常
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# 调用链上报：Jaeger/OTLP
+management:
+  tracing:
+    sampling:
+      # 采样率，开发环境可以 1.0，生产按流量调低
+      probability: ${OTEL_TRACING_SAMPLING}
+  otlp:
+    tracing:
+      # OTLP 接收端地址
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+
+# ============================================================
+# AI 配置
+# ------------------------------------------------------------
+# 1. defaults 是所有模型共用的默认值，models 里只写和 defaults 不同的字段；
+# 2. 所有 ${VAR} 都必须能从环境变量或 common.yaml 解析，否则启动直接失败；
+# 3. 这里不再写业务默认值，避免漏配时静默按 0/false 运行。
+# ============================================================
+gulimall:
+  agent:
+    # agent 专用 JWT：只校验 auth-server / renren-fast 用 RSA 私钥签发的凭证
+    jwt:
+      issuer-user: gulimall-auth-server
+      issuer-admin: renren-fast
+      audience: gulimall-agent
+      user-cookie: AGENT_JWT_USER
+      admin-cookie: AGENT_JWT_ADMIN
+      # 私钥只在签发方；agent 只保存公钥
+      user-public-key-path: ${AGENT_JWT_USER_PUBLIC_KEY_PATH}
+      admin-public-key-path: ${AGENT_JWT_ADMIN_PUBLIC_KEY_PATH}
+      user-key-id: user-2026-01
+      admin-key-id: admin-2026-01
+      clock-skew-seconds: 30
+
+  ai:
+    # 所有模型的默认参数；models 里没写的字段都从这里继承
+    defaults:
+      # 模型协议类型，目前只有 openai-compatible
+      provider: openai-compatible
+      # 默认模型服务地址
+      base-url: ${AI_CLOSEAI_BASE_URL}
+      # 默认 API key
+      api-key: ${AI_CLOSEAI_API_KEY}
+      # 是否打印模型请求日志（需要 dev.langchain4j=DEBUG）
+      log-requests: true
+      # 是否打印模型响应日志（可能包含用户内容，生产慎开）
+      log-responses: true
+      # 调用失败重试次数
+      max-retries: 2
+      # 采样温度：0 更稳定，1 更发散
+      temperature: 0.7
+      # 普通对话超时；工具调用要“思考 + 查库 + 总结”，给 60 秒
+      timeout: 60s
+      # 流式回答超时；首 token 和长回答都要覆盖，给 90 秒
+      streaming-timeout: 90s
+      # 模型默认是否支持流式
+      streaming: true
+      # 模型默认是否支持 function calling
+      tools: true
+      # 模型默认是否启用
+      enabled: true
+
+    # 不传 modelId 时使用的默认模型
+    default-model: deepseek-v4.1-flash
+
+    # 模型清单：每个模型只写和 defaults 不同的字段。
+    # id: 页面/接口唯一标识，不能重复；
+    # display-name: 页面展示名，不写用 id；
+    # model-name: 真正发给模型服务的 model 字段，不写用 id；
+    # temperature-supported: 该模型是否允许发送 temperature，GPT-6.1/Claude 5.5/Kimi 要 false；
+    # tools: 是否支持 function calling，不写继承 defaults；
+    # vision: 是否支持图片输入，必须按模型单独配；
+    # sort: 页面排序，越小越靠前。
+    models:
+      - id: gpt-6.1-sol
+        display-name: GPT-6.1 Sol
+        model-name: gpt-6.1-sol
+        # 该模型只接受默认 temperature（1），传 0.7 会 400
+        temperature-supported: false
+        # GPT-6.1 系列通过 /v1/chat/completions 不支持 function tools（会报 reasoning_effort）
+        tools: false
+        vision: true
+        sort: 10
+      - id: gpt-6.1-terra
+        display-name: GPT-6.1 Terra
+        model-name: gpt-6.1-terra
+        temperature-supported: false
+        tools: false
+        sort: 20
+      - id: gpt-6-luna
+        display-name: GPT-6 Luna
+        model-name: gpt-6-luna
+        temperature-supported: false
+        tools: false
+        sort: 30
+      - id: claude-sonnet-5-5
+        display-name: Claude Sonnet 5.5
+        model-name: claude-sonnet-5-5
+        # Claude 5.5 已废弃 temperature 参数
+        temperature-supported: false
+        sort: 40
+      - id: claude-haiku-5-5
+        display-name: Claude Haiku 5.5
+        model-name: claude-haiku-5-5
+        temperature-supported: false
+        sort: 50
+      - id: gemini-4-argon
+        display-name: Gemini 4 Argon
+        model-name: gemini-4-argon
+        sort: 60
+      - id: gemini-nano-banana-2.1
+        display-name: Gemini Nano Banana 2.1
+        model-name: gemini-nano-banana-2.1
+        sort: 70
+      - id: deepseek-v4.1-flash
+        display-name: DeepSeek V4.1 Flash
+        model-name: deepseek-v4.1-flash
+        sort: 80
+      - id: qwen3.8-max
+        display-name: Qwen 3.8 Max
+        model-name: qwen3.8-max
+        sort: 90
+      - id: qwen3.8-flash
+        display-name: Qwen 3.8 Flash
+        model-name: qwen3.8-flash
+        sort: 100
+      - id: glm-5.3
+        display-name: GLM 5.3
+        model-name: glm-5.3
+        sort: 110
+      - id: glm-5.3-flash
+        display-name: GLM 5.3 Flash
+        model-name: glm-5.3-flash
+        sort: 120
+      - id: kimi-k3.1-pro
+        display-name: Kimi K3.1 Pro
+        model-name: kimi-k3.1-pro
+        temperature-supported: false
+        sort: 130
+
+    # 图片上传、识别、生成
+    image:
+      # 看图固定使用的视觉对话模型
+      vision-model: gpt-6.1-sol
+      # 看图超时；看图比普通对话慢，给 90 秒
+      timeout: 90s
+      # 单张图片最大字节数（8MB）
+      max-upload-bytes: 8388608
+      # 允许上传的图片 MIME 类型
+      allowed-types:
+        - image/jpeg
+        - image/png
+        - image/webp
+      # 一条消息最多几张图
+      max-images-per-message: 1
+      # 图片生成模型
+      generation:
+        # 真正发给图片服务的 model 名称
+        model-name: gpt-image-1-mini
+        # 图片模型服务地址
+        base-url: ${AI_CLOSEAI_BASE_URL}
+        # 图片模型密钥
+        api-key: ${AI_CLOSEAI_API_KEY}
+        # 生成尺寸
+        size: 1024x1024
+        # 生成质量：low / medium / high
+        quality: medium
+        # 单次生成超时；图片生成通常要 1～4 分钟
+        timeout: 60s
+        # 生成失败重试次数
+        max-retries: 2
+
+    # 向量化模型，用于 RAG
+    embedding:
+      # 向量模型名称
+      model-name: text-embedding-3-small
+      # 向量维度，必须和 Milvus collection 一致
+      dimension: 1536
+      # 向量模型地址
+      base-url: ${AI_CLOSEAI_BASE_URL}
+      # 向量模型密钥
+      api-key: ${AI_CLOSEAI_API_KEY}
+      # 向量化超时
+      timeout: 30s
+      # 向量化失败重试次数
+      max-retries: 2
+
+    # RAG 知识库
+    rag:
+      # 是否启用 RAG；关闭后不连接 Milvus
+      enabled: true
+      # Milvus 地址
+      host: ${MILVUS_HOST}
+      # Milvus gRPC 端口
+      port: ${MILVUS_PORT}
+      # Milvus 数据库名
+      database: ${MILVUS_DATABASE}
+      # Milvus collection 名
+      collection: ${MILVUS_COLLECTION}
+      # 向量维度，必须和 embedding 一致
+      dimension: 1536
+      # 每次检索最多返回几个片段
+      max-results: 5
+      # 相似度阈值，低于它的片段丢弃
+      min-score: 0.65
+      # 启动时是否自动检查/重建索引
+      ingest-on-startup: true
+      # 每个片段最大字符数
+      chunk-max-chars: 1200
+      # 相邻片段重叠字符数，避免上下文被切断
+      chunk-overlap-chars: 100
+      # 文档根目录；public/ 对用户端开放，admin/ 仅管理端可见
+      doc-location: rag
+      # Milvus 用户名
+      username: ${MILVUS_USERNAME}
+      # Milvus 密码
+      password: ${MILVUS_PASSWORD}
+
+    # 会话、消息、记忆
+    conversation:
+      # 会话/消息/图片元数据的过期时间，滑动续期
+      ttl: 3d
+      # 模型记忆窗口保留多少条消息
+      memory-max-messages: 40
+      # 页面一次加载多少条 UI 消息
+      ui-page-size: 20
+      # 单条用户消息最大字符数
+      max-message-chars: 4000
+      # 自定义提示词最大字符数
+      max-custom-prompt-chars: 500
+      # 每个身份最多保留多少个会话
+      max-conversations-per-principal: 50
+
+    # 自定义模型的安全限制
+    security:
+      custom-model:
+        # 是否允许用户添加自定义模型
+        enabled: true
+        # 每个身份最多添加几个
+        max-per-principal: 10
+        # 允许的模型协议
+        allowed-providers:
+          - openai-compatible
+        # 是否强制 https
+        require-https: true
+        # 是否拒绝内网/本机地址，防止 SSRF
+        deny-private-addresses: true
+
+# 日志级别：模型请求/响应详细日志需要 dev.langchain4j=DEBUG
+logging:
+  level:
+    dev.langchain4j: DEBUG
+    com.atguigu.gulimall.agent: debug

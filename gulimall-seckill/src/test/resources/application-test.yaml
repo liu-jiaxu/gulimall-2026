@@ -1,0 +1,23 @@
+# 秒杀集成测试专用配置。
+# 真实连接 MySQL、Redis、RabbitMQ、Nacos；不替换任何业务 Bean。
+
+spring:
+  cloud:
+    nacos:
+      discovery:
+        # 测试实例不注册到 Nacos，避免污染正在运行的 seckill；
+        # 其它业务服务仍可被发现，Feign 调用走真实服务。
+        register-enabled: false
+  rabbitmq:
+    listener:
+      simple:
+        # 默认不启动监听容器，避免普通测试消费真实队列。
+        # Flow06、Flow19 通过 @SpringBootTest(properties=...) 单独开启。
+        auto-startup: false
+  main:
+    banner-mode: off
+
+logging:
+  level:
+    root: warn
+    com.atguigu.gulimall.seckill: info

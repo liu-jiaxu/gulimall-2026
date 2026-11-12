@@ -1,0 +1,78 @@
+# ============================================================
+# gulimall-order 模块私有配置（订单 / gulimall_oms 库）
+# 共用部分见同目录 common.yaml
+# ============================================================
+
+# common中自定义鉴权配置
+#gulimall:
+#  shiro:
+#    enabled: true          # 开启拦截
+#    permissions: order:order:list,order:order:info   # 当前用户权限（逗号分隔）
+#    permission-all: true   # 开发期放行所有权限（可选）
+
+server:
+  port: 9000
+
+spring:
+  datasource:
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    # 参数	                                    作用
+    # useUnicode=true&characterEncoding=UTF-8	防止中文乱码
+    # serverTimezone=Asia/Shanghai	            必须设置，否则报时区错误
+    # allowPublicKeyRetrieval=true	            必须设置，否则报公钥检索错误
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/gulimall_oms?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    # mysql8.0
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  session:
+    timeout: 7d
+    redis:
+      namespace: ${SESSION_REDIS_NAMESPACE}
+
+  # 运费缓存：同一「收货地址 + 商品清单」算出来的结果固定不变，
+  # 没必要每次都 order → ware → 百度 走一遍（既慢又烧 AK 配额）
+  # 用 Caffeine 本地缓存，不进 Redis —— 提交订单时由本实例清空即可
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=500,expireAfterWrite=30m
+
+  # Sentinel：order 调 seckill 的 Feign fallback 需要
+  cloud:
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD}
+        port: 8721
+      eager: true
+
+gulimall:
+  alipay:
+    app-id: ${ALIPAY_APP_ID}
+    private-key: ${ALIPAY_PRIVATE_KEY}
+    alipay-public-key: ${ALIPAY_PUBLIC_KEY}
+    gateway-url: ${ALIPAY_GATEWAY}
+    notify-url: ${ALIPAY_NOTIFY_URL}
+    return-url: ${ALIPAY_RETURN_URL}
+    sign-type: RSA2
+    charset: UTF-8
+    format: json
+
+# ---------- 调用链：Micrometer Tracing + OTLP（Jaeger） ----------
+management:
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+
+feign:
+  sentinel:
+    enabled: true

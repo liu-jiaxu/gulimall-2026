@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: gulimall-seckill
+
+  # 配置源：Nacos（可选）+ 本地 config/ 目录
+  config:
+    import:
+      - optional:nacos:gulimall.yaml
+      - optional:nacos:${spring.application.name}.yaml
+      - optional:file:./config/common.yaml
+      - optional:file:./config/${spring.application.name}.yaml
+      - optional:file:../config/common.yaml
+      - optional:file:../config/${spring.application.name}.yaml

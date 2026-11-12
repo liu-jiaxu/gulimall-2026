@@ -1,0 +1,134 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "GitHub OAuth 调试（gulimall）",
+    "version": "1.0.0",
+    "description": "■ 第 1 步　浏览器打开（不是 Apifox）\n\nURL    : https://github.com/login/oauth/authorize?client_id=<your-github-client-id>&redirect_uri=http%3A%2F%2Fauth.gulimall.com%2Foauth%2Fgithub%2Fcallback&scope=read%3Auser%20user%3Aemail&state=gulimall-test\nHeader : 无\nBody   : 无\n\n授权后跳回 http://auth.gulimall.com/oauth/github/callback?code=xxxx&iss=xxxx&state=gulimall-test\n页面 404 是正常的，从地址栏把 code 复制出来。\n\n\n■ 第 2 步　Apifox\n\nURL    : POST https://github.com/login/oauth/access_token\nHeader : Accept: application/json\nBody   : x-www-form-urlencoded\n         client_id=<your-github-client-id>\n         client_secret=<你的ClientSecret>\n         code=<第1步复制的code>\n         redirect_uri=http://auth.gulimall.com/oauth/github/callback\n\n拿到 access_token。\n\n\n■ 第 3 步　Apifox\n\nURL    : GET https://api.github.com/user\nHeader : Authorization: Bearer <第 2 步的 access_token>\n         User-Agent: gulimall\nBody   : 无\n\n\n■ 第 4 步　Apifox\n\nURL    : GET https://api.github.com/user/emails\nHeader : Authorization: Bearer <第 2 步的 access_token>\n         User-Agent: gulimall\nBody   : 无\n\n取 primary=true 且 verified=true 那条的 email。\n\n\n注意：User-Agent 必填，不填 403；client_secret 不要提交进 git。"
+  },
+  "servers": [
+    {
+      "url": "https://github.com",
+      "description": "GitHub 主站"
+    }
+  ],
+  "paths": {
+    "/login/oauth/access_token": {
+      "post": {
+        "tags": ["GitHub OAuth"],
+        "summary": "第2步：code 换 access_token",
+        "description": "URL    : POST https://github.com/login/oauth/access_token\nHeader : Accept: application/json\nBody   : x-www-form-urlencoded\n         client_id=<your-github-client-id>\n         client_secret=<你的ClientSecret>\n         code=<第1步复制的code>\n         redirect_uri=http://auth.gulimall.com/oauth/github/callback",
+        "parameters": [
+          {
+            "name": "Accept",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "default": "application/json" },
+            "example": "application/json"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["client_id", "client_secret", "code", "redirect_uri"],
+                "properties": {
+                  "client_id": {
+                    "type": "string",
+                    "example": "<your-github-client-id>"
+                  },
+                  "client_secret": {
+                    "type": "string",
+                    "example": "你的 Client Secret"
+                  },
+                  "code": {
+                    "type": "string",
+                    "example": "第 1 步复制出来的 code"
+                  },
+                  "redirect_uri": {
+                    "type": "string",
+                    "example": "http://auth.gulimall.com/oauth/github/callback"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "返回 access_token / token_type / scope"
+          }
+        }
+      }
+    },
+    "/user": {
+      "servers": [
+        {
+          "url": "https://api.github.com",
+          "description": "GitHub REST API"
+        }
+      ],
+      "get": {
+        "tags": ["GitHub OAuth"],
+        "summary": "第3步：获取用户信息",
+        "description": "URL    : GET https://api.github.com/user\nHeader : Authorization: Bearer <第 2 步的 access_token>\n         User-Agent: gulimall\nBody   : 无\n\n返回里用 id（数字）做用户唯一标识，不要用 login（用户名可改）。",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "Bearer <第 2 步的 access_token>"
+          },
+          {
+            "name": "User-Agent",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "gulimall"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "返回 id / login / name / avatar_url / email"
+          }
+        }
+      }
+    },
+    "/user/emails": {
+      "servers": [
+        {
+          "url": "https://api.github.com",
+          "description": "GitHub REST API"
+        }
+      ],
+      "get": {
+        "tags": ["GitHub OAuth"],
+        "summary": "第4步：获取邮箱",
+        "description": "URL    : GET https://api.github.com/user/emails\nHeader : Authorization: Bearer <第 2 步的 access_token>\n         User-Agent: gulimall\nBody   : 无\n\n取 primary=true 且 verified=true 那条的 email。",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "Bearer <第 2 步的 access_token>"
+          },
+          {
+            "name": "User-Agent",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "gulimall"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "返回邮箱数组，取 primary 且 verified 的那条"
+          }
+        }
+      }
+    }
+  }
+}

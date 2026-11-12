@@ -1,0 +1,74 @@
+# ============================================================
+# gulimall-third-party 模块私有配置（第三方：对象存储 / 短信）
+# 共用部分（含 MinIO 连接信息）见同目录 common.yaml
+# ------------------------------------------------------------
+# MinIO 的地址和密钥原来放在 Nacos 的 gulimall-third-party.yaml 里 ——
+# 那里面有明文密钥
+# 但它是"共用中间件连接信息"，和 MySQL/Redis 同类，
+# 所以统一放 common.yaml（MINIO_*），这里是本模块独有的东西。
+# ============================================================
+
+# ---------- 其它第三方（当前用不到，先留位） ----------
+# ALIYUN_OSS_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
+# ALIYUN_OSS_ACCESS_KEY_ID: ""
+# ALIYUN_OSS_ACCESS_KEY_SECRET: ""
+# ALIYUN_SMS_ACCESS_KEY_ID: ""
+# ALIYUN_SMS_ACCESS_KEY_SECRET: ""
+
+# 阿里云云市场短信服务
+SMS_APP_CODE: <your-sms-app-code>
+SMS_BASE_URL: https://dfsns.market.alicloudapi.com
+SMS_TEMPLATE_ID: CST_ptdie100
+
+server:
+  port: 30000
+
+spring:
+  # Nacos配置
+  cloud:
+    nacos:
+      # 配置管理
+      config:
+        # Nacos 配置中心的命名空间（ID）
+        namespace: 36de42df-90ed-41c6-a00d-0e8dc60eb153
+
+aliyun:
+  apis:
+    sms:
+      # 云市场网关的 AppCode（鉴权头用）
+      app-code: ${SMS_APP_CODE}
+      # 只到 host，接口路径 /data/send_sms 写在 SmsInterface 里
+      base-url: ${SMS_BASE_URL}
+      # 报备的专属模板 ID（调试期用云市场给的 CST_ptdie100）
+      template-id: ${SMS_TEMPLATE_ID}
+
+# GitHub OAuth —— 具体值在 common.yaml（OAUTH_GITHUB_*），这里只做引用
+oauth:
+  github:
+    client-id: ${OAUTH_GITHUB_CLIENT_ID}
+    client-secret: ${OAUTH_GITHUB_CLIENT_SECRET}
+    # 换 token 时必须原样回传，且与 GitHub 后台登记的 Redirect URI 完全一致
+    redirect-uri: ${OAUTH_GITHUB_REDIRECT_URI}
+  # 微信网页授权 —— 具体值在 common.yaml（OAUTH_WECHAT_*）
+  wechat:
+    app-id: ${OAUTH_WECHAT_APP_ID}
+    app-secret: ${OAUTH_WECHAT_APP_SECRET}
+  # Gitee —— 具体值在 common.yaml（OAUTH_GITEE_*）
+  gitee:
+    client-id: ${OAUTH_GITEE_CLIENT_ID}
+    client-secret: ${OAUTH_GITEE_CLIENT_SECRET}
+    redirect-uri: ${OAUTH_GITEE_REDIRECT_URI}
+    # 换 token / 取用户两个接口都挂在这个域名下，所以 third-party 只需要一个 WebClient
+    base-url: ${OAUTH_GITEE_BASE_URL}
+
+# 百度地图（物流距离计算）—— AK 的具体值在 common.yaml（BAIDU_MAP_AK）
+baidu:
+  map:
+    # ⚠️ 控制台里必须给这个 AK 开通「地理编码」和「批量算路（驾车）」两个服务，
+    #    否则百度一律返回 status=3（权限校验失败），接口稳定报 30001
+    ak: ${BAIDU_MAP_AK}
+    # 地理编码和批量算路都在这一个域名下，所以只需要一个 WebClient
+    base-url: https://api.map.baidu.com
+    # 连接 / 响应超时（毫秒）—— 本模块是 Servlet 栈，WebClient 慢调用会占着业务线程，
+    # 而 common.yaml 里的 openfeign 超时只作用于 Feign，管不到 WebClient
+    timeout-ms: 3000

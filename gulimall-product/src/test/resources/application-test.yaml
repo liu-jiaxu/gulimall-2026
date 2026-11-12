@@ -1,0 +1,11 @@
+# 测试专用覆盖配置，由 CategoryCacheEvictTest 上的 @ActiveProfiles("test") 激活。
+#
+# Spring Boot 会按 key 逐项覆盖：这里只把 L1 的 TTL 从生产配置的 5min 压到 1s，
+# 其余属性（如 spring.cache.type=caffeine、数据源、Redis 地址）仍沿用 application.yaml。
+#
+# 压到 1s 的目的：在几秒内就能验证"L1 过期 -> 回落到 L2 重新加载"的完整链路，
+# 而不必真的等 5 分钟。
+spring:
+  cache:
+    caffeine:
+      spec: maximumSize=100,expireAfterWrite=1s

@@ -1,0 +1,139 @@
+# ============================================================
+# gulimall-k8s 独立配置
+# ------------------------------------------------------------
+# 本文件不引用根项目 config/ 下的任何配置，也不导入 Nacos。
+# 本地运行可以用环境变量覆盖，k8s 部署时用 Secret/ConfigMap 注入。
+# ============================================================
+
+server:
+  # 服务端口；k8s 里 Service/Ingress 按这个端口转发
+  port: 18080
+  # 优雅停机：收到 SIGTERM 后先停止接收新请求，再等在途请求结束
+  shutdown: graceful
+
+spring:
+  application:
+    name: gulimall-k8s
+
+  lifecycle:
+    # 优雅停机最长等待时间
+    timeout-per-shutdown-phase: 30s
+
+  datasource:
+    # 默认连本机 MySQL；k8s 里用 MYSQL_HOST 指向 mysql Service
+    url: jdbc:mysql://${MYSQL_HOST:<your-k8s-master-ip>}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:gulimall_k8s_ai}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:<your-password>}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 小规模练习，连接池不需要太大
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+
+  data:
+    redis:
+      # 本地默认无密码；k8s 里用 REDIS_HOST/REDIS_PASSWORD 指向 redis Service
+      host: ${REDIS_HOST:<your-k8s-master-ip>}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:<your-password>}
+      timeout: 5s
+
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+  mvc:
+    async:
+      # SSE 长连接：模型回答可能持续几十秒
+      request-timeout: 300000
+
+# ============================================================
+# 本模块自己的业务配置
+# ============================================================
+gulimall:
+  k8s:
+    auth:
+      # 首次启动时如果数据库里没有这个用户，自动创建
+      seed-username: admin
+      seed-password: <your-password>
+
+      # 登录和注册邀请码；每次登录/注册都必须输入
+      # k8s 部署时用环境变量 INVITE_CODE 覆盖
+      invite-code: ${INVITE_CODE:<your-invite-code>}
+
+    conversation:
+      # Redis 会话/消息/记忆的统一过期时间；每次写入滑动续期
+      ttl: 3d
+      # 模型记忆窗口保留多少条消息（完整历史另外存在 Redis 列表里）
+      memory-max-messages: 40
+      # 页面一次加载多少条历史消息
+      ui-page-size: 50
+      # 单条用户消息最大字符数
+      max-message-chars: 4000
+      # 每个用户最多保留多少个会话，超出淘汰最久未用的
+      max-conversations-per-user: 50
+
+    ai:
+      # OpenAI 兼容模型服务地址
+      base-url: ${AI_BASE_URL:https://api.openai-proxy.org/v1}
+      # ⚠️ 本地测试默认值；部署时务必用环境变量 AI_API_KEY 覆盖
+      api-key: ${AI_API_KEY:<your-ai-api-key>}
+      # 不传 modelId 时使用的默认模型；数据库 ai_default_config 里的值优先
+      default-model: deepseek-v4.1-flash
+      # 采样温度；temperature-supported=false 的模型不会传这个参数
+      temperature: 0.7
+      # 普通对话超时
+      timeout: 60s
+      # 流式对话超时
+      streaming-timeout: 90s
+      # 调用失败重试次数
+      max-retries: 2
+      # 只保留纯文本对话模型；没有图片、工具、RAG 模型
+      models:
+        - id: deepseek-v4.1-flash
+          display-name: DeepSeek V4.1 Flash
+          model-name: deepseek-v4.1-flash
+        - id: gpt-6.1-sol
+          display-name: GPT-6.1 Sol
+          model-name: gpt-6.1-sol
+          # 该系列只接受默认温度，传 0.7 会 400
+          temperature-supported: false
+        - id: claude-sonnet-5-5
+          display-name: Claude Sonnet 5.5
+          model-name: claude-sonnet-5-5
+          temperature-supported: false
+        - id: gemini-4-argon
+          display-name: Gemini 4 Argon
+          model-name: gemini-4-argon
+        - id: qwen3.8-max
+          display-name: Qwen 3.8 Max
+          model-name: qwen3.8-max
+        - id: glm-5.3
+          display-name: GLM 5.3
+          model-name: glm-5.3
+        - id: kimi-k3.1-pro
+          display-name: Kimi K3.1 Pro
+          model-name: kimi-k3.1-pro
+          temperature-supported: false
+
+# 健康检查端点：k8s 的 startup/readiness/liveness 探针使用
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      # readiness 探针同时检查 MySQL 和 Redis，避免依赖没就绪就接流量
+      group:
+        readiness:
+          include: readinessState,db,redis
+
+# 日志：不打印模型请求/响应正文，避免把用户对话和密钥写进日志
+logging:
+  level:
+    root: info
+    com.atguigu.gulimall.k8s: debug

@@ -1,0 +1,69 @@
+digraph send {
+    rankdir=TB;
+    bgcolor="white";
+    splines=polyline;
+    nodesep=0.35;
+    ranksep=0.42;
+
+    node [shape=box, style="filled,rounded", fillcolor="#e7f3ff", color="#3d7eb8",
+          fontname="Microsoft YaHei", fontsize=11, margin="0.18,0.10"];
+    edge [color="#5a5a5a", arrowsize=0.8, penwidth=1.1, fontname="Microsoft YaHei", fontsize=9];
+
+    T0 [label="WareSkuServiceImpl.lockStock()\n@Transactional", fillcolor="#d4edda", color="#28a745", penwidth=2];
+    T2 [label="MqMessageService.sendReliable(\nRETRY_EXCHANGE, stock.release,\nStockReleaseMessage, 30 分钟)"];
+    T3 [label="MqMessageServiceImpl.sendReliable()"];
+    T4 [label="UUID → messageId"];
+    T5 [label="new MqMessageEntity\nstatus=0, retryCount=0,\nnextRetryTime=now+3min, delayMillis=30min"];
+    T6 [label="objectMapper.writeValueAsString(payload) → content"];
+    T8 [label="注册 afterCommit 回调\n（TransactionSynchronization）"];
+    T9 [label="事务提交", fillcolor="#d4edda", color="#28a745"];
+    T10 [label="afterCommit → doSend()"];
+    T11 [label="MessagePostProcessor\nmq_message_id + x-delay=30min"];
+    T12 [label="rabbitTemplate.convertAndSend(\nRETRY_EXCHANGE, stock.release, payload, ...)"];
+    T13 [label="Jackson2JsonMessageConverter\nJSON + __TypeId__"];
+    T14 [label="Broker：延时交换机压 30 分钟", fillcolor="#fff3cd", color="#ffc107"];
+    T15 [label="到期路由到\ngulimall-stock-release-queue", fillcolor="#d4edda", color="#28a745"];
+
+    subgraph cluster_tx {
+        label="同一个本地事务：业务数据 + mq_message";
+        style="filled,dashed"; fillcolor="#f0fff4"; color="#28a745";
+        fontname="Microsoft YaHei"; fontsize=11;
+        T1 [label="写工作单 wms_ware_order_task\n+ 锁 stock_locked\n+ 写明细 wms_ware_order_task_detail"];
+        T7 [label="this.save(entity)\nINSERT INTO mq_message\n（和业务表同一个事务）", fillcolor="#fff3cd", color="#ffc107"];
+    }
+
+    T0 -> T1 -> T2 -> T3 -> T4 -> T5 -> T6 -> T7 -> T8 -> T9 -> T10 -> T11 -> T12 -> T13 -> T14 -> T15;
+
+    subgraph cluster_cb {
+        label="异步回调（confirm / return）";
+        style="filled,dashed"; fillcolor="#f0f7ff"; color="#3d7eb8";
+        fontname="Microsoft YaHei"; fontsize=11;
+        B1 [label="Broker 反馈", shape=diamond, style="filled", fillcolor="#ffe8cc", color="#fd7e14", margin="0.05,0.03", width=2.4, height=1.2];
+        B2 [label="markConfirmed(messageId)\nstatus=1 已送信", fillcolor="#d4edda", color="#28a745"];
+        B3 [label="markFailed(messageId, cause)\nstatus=2 送信失败", fillcolor="#f8d7da", color="#dc3545"];
+        B4 [label="return：从消息头读 mq_message_id\n→ markFailed"];
+    }
+    T13 -> B1 [label="Broker 收到后异步回调"];
+    B1 -> B2 [label="confirm ack=true", color="#28a745", fontcolor="#28a745"];
+    B1 -> B3 [label="confirm ack=false", color="#dc3545", fontcolor="#dc3545"];
+    B1 -> B4 [label="return 无队列认领", color="#dc3545", fontcolor="#dc3545"];
+    B4 -> B3 [style=dashed];
+
+    subgraph cluster_comp {
+        label="兜底补偿（独立时间线）";
+        style="filled,dashed"; fillcolor="#fff8f8"; color="#dc3545";
+        fontname="Microsoft YaHei"; fontsize=11;
+        C1 [label="MqMessageCompensateTask.resend()\n每分钟第 0 秒\nRedisson 锁：gulimall:rabbitmq:mq:compensate-lock:{应用名}", fillcolor="#ffe8cc", color="#fd7e14", penwidth=2];
+        C2 [label="resendFailedMessages(3)\nstatus IN (0,2) AND next_retry_time <= now"];
+        C3 [label="retryCount >= 3 ?", shape=diamond, style="filled", fillcolor="#ffe8cc", color="#fd7e14", margin="0.05,0.03", width=2.6, height=1.2];
+        C4 [label="archiveFromSendFailure\n→ mq_dead_message\n+ removeById 从 mq_message 删除", fillcolor="#f8d7da", color="#dc3545"];
+        C5 [label="ClassUtils.forName + objectMapper 还原对象\nstatus=0, retryCount+1, nextRetryTime=now+3min"];
+        C6 [label="doSend(...)\n保留 delayMillis", fillcolor="#fff3cd", color="#ffc107"];
+        C1 -> C2 -> C3;
+        C3 -> C4 [label="是", color="#dc3545", fontcolor="#dc3545"];
+        C3 -> C5 [label="否", color="#28a745", fontcolor="#28a745"];
+        C5 -> C6;
+    }
+    B3 -> C1 [style=dashed, label="status=2 的记录会被捞出"];
+    C6 -> T10 [style=dashed, color="#ffc107", constraint=false];
+}

@@ -1,0 +1,2090 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="utf-8"/>
+	<script src="/confirm/js/jquery-3.1.1.min.js"></script>
+	<link rel="stylesheet" type="text/css" href="/confirm/css/JD2.css"/>
+
+	<style>
+		/* 外层容器原来是固定 1200px 高，内容一多就冲出边框，改成随内容长 */
+		.section {
+			height: auto;
+			min-height: 1200px;
+		}
+		/* 左栏（配送方式那堆）已经去掉，送货清单只剩这一栏，让它占满整行、高度随内容走 */
+		.section .top_1 .to_right {
+			width: 951px;
+			height: auto;
+			min-height: 300px;
+		}
+		/* 商品列表：至少完整装下 3 件，超过才出滚动条；不足 3 件时高度自动收缩 */
+		.section .top_1 .to_right .goods-scroll {
+			display: block;      /* 覆盖 .to_right div 的 display:flex，否则每件商品会横着排成一行 */
+			margin-left: 0;      /* 覆盖 .to_right div 的 margin-left:10px */
+			max-height: 420px;   /* 约 3 件商品的高度 */
+			overflow-y: auto;
+		}
+		/* 每件商品下面的运输信息 */
+		.ship-info {
+			color: #666666;
+			font-size: 12px;
+			line-height: 20px;
+		}
+		.ship-info .ship-fare {
+			color: #e1251b;
+		}
+		/* 退换无忧（原来在左栏，现在挪到商品列表下面）：整行显示，金额推到最右边 */
+		.to_right .tui {
+			display: flex;
+			align-items: center;
+			margin: 8px 10px;
+			font-size: 12px;
+		}
+		.to_right .tui .til {
+			color: #A9A9A9;
+			font-size: 14px;
+			margin-left: 5px;
+		}
+		.to_right .tui .con {
+			font-size: 12px;
+			color: #666;
+		}
+		.to_right .tui .tui-fee {
+			margin-left: auto;      /* 把 0.50 顶到这一行的最右边 */
+			padding-right: 30px;
+			font-size: 12px;
+			color: #666666;
+		}
+
+		/* ===== 运输信息：用 table 才能让「发货地 / 距离 / 运输费」几列上下对齐 ===== */
+		.ship-info td {
+			color: #666666;
+			font-size: 12px;
+			line-height: 20px;
+			padding-right: 8px;
+			white-space: nowrap;
+		}
+		.ship-info td.ship-gap {
+			padding-left: 25px;
+		}
+		.ship-info td.ship-fare {
+			color: #e1251b;
+		}
+
+		/* ===== 底部金额区：收窄到 951px 与送货清单同宽（原来 1000px 顶到边框上了） ===== */
+		.section .xia {
+			width: 951px;
+			margin-left: 30px;
+			float: none;
+		}
+		/* 费用明细改用 table：文字右对齐、金额右对齐，而且几行金额能对齐成一竖列 */
+		.section .xia .fare-table {
+			width: 100%;
+			border-collapse: collapse;
+			border: none;
+			margin-top: 5px;
+		}
+		.section .xia .fare-table td {
+			border: none;
+			padding: 4px 0;
+			font-size: 12px;
+			color: #666666;
+		}
+		.section .xia .fare-table td:first-child {
+			text-align: right;
+		}
+		.section .xia .fare-table td.amount {
+			width: 160px;      /* 金额列定宽，几行金额才能右对齐成一竖列 */
+			text-align: right;
+		}
+		.section .xia .yfze {
+			width: 100%;
+			margin-left: 0;
+			box-sizing: border-box;
+		}
+		/* 费用表格别撑满：撑满的话「文字列」和「金额列」会隔得老远 */
+		.section .xia .fare-table {
+			width: 600px;
+			margin-left: auto;
+			margin-right: 30px;
+		}
+		/* 提交订单按钮跟金额列右边缘对齐，下面留出边距 */
+		.section .xia .tijiao {
+			display: block;
+			margin-left: auto;
+			margin-right: 30px;
+			margin-bottom: 30px;
+		}
+		/* 收货地址那一行：整行排开、不换行 */
+		.section .top-3 {
+			width: auto;          /* 覆盖 JD2.css 里的 600px，太窄会把地址挤成两行 */
+			flex-wrap: nowrap;
+		}
+		/* 姓名框：⚠️ 不能只写 width —— flex 子项默认 flex-shrink:1，地址一长它就被压窄，
+		     于是每个框宽窄不一样。flex:0 0 135px = 不放大也不收缩，固定住 */
+		.section .top-3 p {
+			flex: 0 0 135px;
+			cursor: pointer;
+		}
+		/* 地址信息一行显示，再长也不换行 */
+		.section .top-3 > span {
+			white-space: nowrap;
+		}
+		/* 每个地址后面的「修改」：做成小按钮，别让它换行 */
+		.section .addr-edit-btn {
+			white-space: nowrap;
+			flex: 0 0 auto;
+			margin-left: 15px;
+			padding: 2px 10px;
+			border: 1px solid #E3E4E5;
+			border-radius: 3px;
+			background: #fafafa;
+			color: #0081c6;
+			font-size: 12px;
+			text-decoration: none;
+		}
+		.section .addr-edit-btn:hover {
+			border-color: #e1251b;
+			color: #e1251b;
+		}
+		/* 「更多地址」做成按钮；默认隐藏，由脚本加 .show 类显示出来 */
+		.section .more-addr-btn {
+			display: none;
+			width: auto;              /* 不能定宽：定宽会把「更多地址」挤成两行 */
+			white-space: nowrap;      /* 禁止换行 */
+			text-indent: 0;           /* ⚠️ 抵消继承来的 .p2 的 text-indent:50px，不然文字整体右移 */
+			margin: 8px 0 0 50px;
+			padding: 4px 15px;
+			border: 1px solid #E3E4E5;
+			border-radius: 3px;
+			background: #fafafa;
+			color: #666666;
+			font-size: 12px;
+			text-align: left;
+			cursor: pointer;
+		}
+
+		/* 支付方式：变成可切换的两个按钮。
+		   JD2.css 里写死了「p:last-child 红框」，所以这里要显式覆盖未选中态 */
+		.section .top-6 .pay-item {
+			cursor: pointer;
+		}
+		.section .top-6 .pay-item:not(.pay-selected) {
+			border: 2px solid #E3E4E5;
+		}
+		.section .top-6 .pay-item.pay-selected {
+			border: 2px solid red;
+		}
+		.section .more-addr-btn:hover {
+			border-color: #e1251b;
+			color: #e1251b;
+		}
+		/* 显示时用 .show：它是 <p>，直接改 display 会被当成块级撑满整行 */
+		.section .more-addr-btn.show {
+			display: inline-block;
+		}
+
+		/* ===== 新增收货地址 */
+		.section .add-addr-btn {
+			cursor: pointer;
+		}
+		.section .add-addr-btn:hover {
+			color: #e1251b;
+		}
+		/* 弹窗：铺满整屏的半透明遮罩 + 居中的表单 */
+		.addr-modal {
+			display: none;
+			position: fixed;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			background: rgba(0, 0, 0, .3);
+			z-index: 100;
+		}
+		.addr-modal-box {
+			width: 520px;
+			margin: 100px auto;
+			background: #ffffff;
+			border-radius: 4px;
+			padding: 20px 30px 30px;
+			box-shadow: 0 2px 12px rgba(0, 0, 0, .2);
+		}
+		.addr-modal-box h4 {
+			font-size: 16px;
+			color: #333333;
+			margin-bottom: 15px;
+		}
+		.addr-modal-box p {
+			margin-bottom: 12px;
+			font-size: 13px;
+			color: #666666;
+		}
+		.addr-modal-box label {
+			display: inline-block;
+			width: 70px;
+			text-align: right;
+			margin-right: 10px;
+		}
+		.addr-modal-box input[type="text"],
+		.addr-modal-box select {
+			width: 380px;
+			height: 28px;
+			padding: 0 6px;
+			border: 1px solid #E3E4E5;
+			border-radius: 3px;
+			font-size: 13px;
+			color: #333333;
+			box-sizing: border-box;
+		}
+		/* 三个下拉挤在一行，每个窄一点 */
+		.addr-modal-box .addr-region-row select {
+			width: 122px;
+			margin-right: 7px;
+		}
+		.addr-modal-box .addr-region-row select:last-child {
+			margin-right: 0;
+		}
+		.addr-modal-box .addr-tip {
+			margin-left: 80px;
+			color: #e1251b;
+			font-size: 12px;
+			line-height: 18px;
+		}
+		.addr-modal-btns {
+			text-align: right;
+			margin-top: 20px;
+		}
+		.addr-modal-btns button {
+			width: 80px;
+			height: 30px;
+			margin-left: 10px;
+			border: none;
+			border-radius: 3px;
+			font-size: 13px;
+			cursor: pointer;
+		}
+		#addr-cancel {
+			background: #f2f2f2;
+			color: #666666;
+		}
+		#addr-submit {
+			background: #E2383B;
+			color: #ffffff;
+		}
+
+		/* ===== 自定义提示弹窗（替代 alert） ===== */
+		.custom-tip {
+			position: fixed;
+			top: 30px;
+			left: 50%;
+			transform: translateX(-50%) translateY(-80px);
+			min-width: 260px;
+			max-width: 600px;
+			padding: 12px 20px;
+			background: #ffffff;
+			border-left: 4px solid #e1251b;
+			border-radius: 4px;
+			box-shadow: 0 4px 16px rgba(0, 0, 0, .15);
+			font-size: 14px;
+			line-height: 20px;
+			color: #333333;
+			opacity: 0;
+			transition: all .25s;
+			z-index: 999;
+		}
+		.custom-tip.show {
+			transform: translateX(-50%) translateY(0);
+			opacity: 1;
+		}
+		.custom-tip-icon {
+			display: inline-block;
+			width: 18px;
+			height: 18px;
+			line-height: 18px;
+			margin-right: 8px;
+			border-radius: 50%;
+			background: #e1251b;
+			color: #ffffff;
+			font-size: 12px;
+			text-align: center;
+			vertical-align: 1px;
+		}
+
+		/* ===== 费用项旁边的小问号：鼠标悬停满 1 秒才弹出说明 ===== */
+		.tip {
+			position: relative;
+			display: inline-block;
+			width: 13px;
+			height: 13px;
+			line-height: 13px;
+			text-align: center;
+			border-radius: 50%;
+			background: #cccccc;
+			color: #ffffff;
+			font-size: 11px;
+			cursor: help;
+			margin-left: 3px;
+			vertical-align: 1px;
+		}
+		.tip .tip-box {
+			position: absolute;
+			left: 50%;
+			bottom: 20px;
+			transform: translateX(-50%);
+			width: 260px;
+			padding: 8px 10px;
+			background: #ffffff;
+			border: 1px solid #e1251b;
+			border-radius: 3px;
+			color: #333333;
+			font-size: 12px;
+			line-height: 18px;
+			text-align: left;
+			visibility: hidden;
+			opacity: 0;
+			transition: opacity .15s;
+			z-index: 10;
+		}
+		.tip:hover .tip-box {
+			visibility: visible;
+			opacity: 1;
+			transition-delay: 1s;   /* 关键：悬停满 1 秒才显示 */
+		}
+
+		/* ==================== 页面底部整块重排 ====================
+		   原样式用 float + 固定 margin 拼（span 220px+左右 50px、dl 的 margin-right:182px、
+		   「关于我们」那行还有 margin-left:129px），宽度一算就溢出、还整体偏左。
+		   现在统一成「一个居中容器 .footer-inner + flex 均分」，不再给每个子元素单独设宽度。 */
+		.headera {
+			padding: 0 0 30px;   /* 上边距由 .Logo-tu 自己给，这里不要叠加 */
+		}
+		/* 居中 / 左右内边距交给 .footer-inner 的内联样式（见 HTML 里那段 style） */
+		/* 容器内的每个区块都占满这个宽度 */
+		.headera .Logo-tu,
+		.headera .table,
+		.headera .guanyuwomen,
+		.headera .p1,
+		.headera .p3 {
+			width: 100%;
+			margin: 0;
+			box-sizing: border-box;
+		}
+
+		/* ① 4 个服务图标：两端对齐，间距自动均分 */
+		.headera .Logo-tu {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			height: auto;        /* 去掉 JD2.css 的 94px，高度由图片 + 上下内边距决定 */
+			padding: 25px 0;     /* 上边距只给这一次，不再叠加 */
+		}
+		.headera .Logo-tu span {
+			width: auto;      /* 原来写死 220px，4 个加起来 1280px 会溢出 */
+			margin: 0;        /* 间距交给 justify-content */
+		}
+
+		/* ② 链接区：5 列等间距一行，不再 float + margin-right:182px */
+		.headera .table {
+			display: flex;
+			justify-content: space-between;
+			gap: 20px;
+			padding: 10px 0 20px;
+			border-bottom: 1px solid #E3E4E5;
+		}
+		.headera .table dl {
+			float: none;
+			margin: 0;
+		}
+		.headera .table .dls {
+			float: none;
+			margin: 0;
+		}
+
+		/* ③ 「关于我们 | 联系我们 …」：居中 */
+		.headera .guanyuwomen ul {
+			display: flex;
+			justify-content: center;
+			flex-wrap: wrap;
+			margin: 0;
+			padding: 18px 0 6px;
+			font-size: 12px;
+		}
+		.headera .guanyuwomen ul li {
+			float: none;
+			padding: 3px 4px;
+			white-space: nowrap;   /* 单个链接内部不许断行 */
+		}
+
+		/* ④ 版权 / 备案 / 认证图标：居中 */
+		.headera .p1 {
+			text-align: center;
+			line-height: 22px;
+			margin: 6px 0 0;
+			font-size: 12px;
+		}
+		/* 每个备案链接内部不许断行（"4006561155" 被甩到下一行就是因为它被拆开了） */
+		.headera .p1 a {
+			white-space: nowrap;
+		}
+		.headera .p3 {
+			text-align: center;
+			margin: 12px 0 0;
+		}
+	
+		/* 地址文字一律不换行；下拉加宽，避免「济南市」这类文字折行 */
+		.header-left > li:nth-of-type(2),
+		.header-left > li:nth-of-type(2) > a,
+		.current-city,
+		.header-l-d ul li,
+		.header-l-d ul li a {
+			white-space: nowrap;
+		}
+		.header-left > li:nth-of-type(2) {
+			width: auto;
+		}
+		.header-l-d {
+			width: 380px;
+			max-height: 320px;
+			overflow: hidden auto;
+		}
+		.header-l-d ul {
+			width: 100%;
+		}
+		.header-l-d ul li {
+			float: left;
+			width: auto;
+			min-width: 92px;
+			margin: 0;
+			padding: 0 6px;
+		}
+
+		/* 确认页地址栏：图标和城市一行；下拉锚在地址下方，默认隐藏、悬停显示，层级最高 */
+		.header {
+			height: 30px;
+			overflow: visible;
+		}
+		.header-left {
+			overflow: visible;
+		}
+		.header-l-2 {
+			position: relative;
+			display: inline-flex;
+			align-items: center;
+			width: auto;
+			white-space: nowrap;
+			z-index: 10000;
+		}
+		.header-l-2 > a {
+			display: inline-block;
+			white-space: nowrap;
+		}
+		.header-l-d {
+			display: none;
+			top: 30px;
+			left: 0;
+			z-index: 10000;
+		}
+		.header-l-2:hover .header-l-d {
+			display: block;
+		}
+</style>
+
+	<title></title>
+</head>
+
+<body>
+<!--顶部-->
+<header>
+	<div class="header">
+		<ul class="header-left">
+			<li>
+				<img src="/confirm/img/header_1.png"/>
+				<a th:href="${shopHomeUrl}">谷粒学院首页</a>
+			</li>
+			<li class="header-l-2">
+				<i class="fa fa-map-marker" style="color: #5C5452;"></i>
+				<a href="javascript:;"><span class="current-city" th:text="${currentCity}">请选择地址</span></a>
+				<div class="header-l-d">
+					<ul>
+						<li><a href="javascript:;" class="city-relocate">重新定位</a></li>
+						<li th:each="p : ${provinces}">
+							<a href="javascript:;" class="city-option"
+							   th:text="${p.name}" th:attr="data-city=${p.name},data-code=${p.code}">省份</a>
+						</li>
+					</ul>
+				</div>
+			</li>
+
+		</ul>
+		<ul class="header-right">
+			<li th:if="${loginUser == null}">
+				<a th:href="|${authUrl}/login.html|">你好，请登录</a>
+				<a th:href="|${authUrl}/reg.html|">免费注册</a>
+			</li>
+			<li th:if="${loginUser != null}">
+				<span th:text="${loginUser.nickname != null ? loginUser.nickname : loginUser.username}">会员</span>
+				<a th:href="|${authUrl}/logout.html|">退出</a>
+				<img src="/confirm/img/03.png" style="margin-bottom: 0px;margin-left3: 3px;"/>
+				<img src="/confirm/img/06.png"/>
+			</li>
+			<li>|</li>
+			<li class="spacer"></li>
+			<li><a th:href="|${orderUrl}/list.html|">我的订单</a></li>
+			<li class="spacer"></li>
+			<li>
+				<a href="">我的谷粒学院</a>
+				<i class="fa fa-angle-down"></i>
+				<div class="header-r-1 aa header-r-11">
+					<div>
+						<ol>
+							<dd><a href="">待处理订单</a></dd>
+							<dd><a href="">返修退换货</a></dd>
+							<dd><a href="">降价商品</a></dd>
+
+						</ol>
+						<ol>
+							<dd><a href="">消息</a></dd>
+							<dd><a href="">我的问答</a></dd>
+							<dd><a href="">我的关注</a></dd>
+
+						</ol>
+
+					</div>
+					<div>
+						<ol>
+							<dd><a href="">我的京豆</a></dd>
+							<dd><a href="">我的白条</a></dd>
+						</ol>
+						<ol>
+							<dd><a href="">我的优惠劵</a></dd>
+							<dd><a href="">我的理财</a></dd>
+						</ol>
+
+					</div>
+					<div>
+						<h4><a href="">我的足迹</a><a href="">更多 ></a></h4>
+						<a href=""><img src="/confirm/image/59ae02fcN529cc4a1.jpg"/></a>
+						<a href=""><img src="/confirm/image/59ce706fN6f3f2a4a.jpg"/></a>
+						<a href=""><img src="/confirm/image/57b191f2N15993cbb.jpg"/></a>
+						<a href=""><img src="/confirm/image/58ff269fN7b7e087b.jpg"/></a>
+
+					</div>
+				</div>
+
+			</li>
+			<li class="spacer"></li>
+			<li><a href="">谷粒学院会员</a></li>
+			<li class="spacer"></li>
+			<li><a href="">企业采购</a></li>
+			<li class="spacer"></li>
+			<li>
+				<a href="">客户服务</a>
+				<i class="fa fa-angle-down"></i>
+				<div class="header-r-1 aa header-r-2">
+					<div>
+						<h4>客户</h4>
+						<ol>
+
+							<dd><a href="">帮助中心</a></dd>
+							<dd><a href="">在线客服</a></dd>
+							<dd><a href="">电话客服</a></dd>
+							<dd><a href="">金融咨询</a></dd>
+						</ol>
+						<ol>
+
+							<dd><a href="">售后服务</a></dd>
+							<dd><a href="">意见建议</a></dd>
+							<dd><a href="">客服邮箱</a></dd>
+							<dd><a href="">售全球客服</a></dd>
+						</ol>
+					</div>
+					<div>
+						<h4>商户</h4>
+						<ol>
+
+							<dd><a href="">合作招商</a></dd>
+							<dd><a href="">商家后台</a></dd>
+							<dd><a href="">商家帮助</a></dd>
+						</ol>
+						<ol>
+
+							<dd><a href="">学习中心</a></dd>
+							<dd><a href="">京麦工作台</a></dd>
+							<dd><a href="">规则平台</a></dd>
+						</ol>
+					</div>
+				</div>
+
+			</li>
+			<li class="spacer"></li>
+			<li>
+				<a href="">网址导航</a>
+				<i class="fa fa-angle-down"></i>
+				<div class="header-r-1 aa header-r-3">
+					<div>
+						<h4>特色主题</h4>
+						<ol>
+							<dd><a href="">谷粒学院试用</a></dd>
+							<dd><a href="">国际站</a></dd>
+							<dd><a href="">买什么</a></dd>
+							<dd><a href="">0元评测</a></dd>
+							<dd><a href="">优惠劵</a></dd>
+							<dd><a href="">印尼站</a></dd>
+							<dd><a href="">陪伴计划</a></dd>
+						</ol>
+						<ol>
+							<dd><a href="">谷粒学院金融</a></dd>
+							<dd><a href="">谷粒学院会员</a></dd>
+							<dd><a href="">俄语站</a></dd>
+							<dd><a href="">定期送</a></dd>
+							<dd><a href="">秒杀</a></dd>
+							<dd><a href="">谷粒学院金融科技</a></dd>
+							<dd><a href="">出海招商</a></dd>
+						</ol>
+						<ol>
+							<dd><a href="">全球售</a></dd>
+							<dd><a href="">谷粒学院预售</a></dd>
+							<dd><a href="">装机大师</a></dd>
+							<dd><a href="">港澳售</a></dd>
+							<dd><a href="">闪购</a></dd>
+							<dd><a href="">In货推荐</a></dd>
+						</ol>
+
+					</div>
+
+					<div>
+						<h4>行业推荐</h4>
+						<ol>
+							<dd><a href="">手机</a></dd>
+							<dd><a href="">玩3C</a></dd>
+							<dd><a href="">家用电器</a></dd>
+							<dd><a href="">服装城</a></dd>
+							<dd><a href="">家装城</a></dd>
+							<dd><a href="">食品</a></dd>
+							<dd><a href="">农资频道</a></dd>
+							<dd><a href="">图书</a></dd>
+
+						</ol>
+						<ol>
+							<dd><a href="">智能数码</a></dd>
+							<dd><a href="">电脑办公</a></dd>
+							<dd><a href="">谷粒学院智能</a></dd>
+							<dd><a href="">美妆馆</a></dd>
+							<dd><a href="">母婴</a></dd>
+							<dd><a href="">运动户外</a></dd>
+							<dd><a href="">整车</a></dd>
+						</ol>
+					</div>
+
+
+					<div>
+						<h4>生活服务</h4>
+						<ol>
+							<dd><a href="">谷粒学院众筹</a></dd>
+							<dd><a href="">谷粒学院金融App</a></dd>
+							<dd><a href="">理财</a></dd>
+							<dd><a href="">话费</a></dd>
+							<dd><a href="">彩票</a></dd>
+							<dd><a href="">机票酒店</a></dd>
+							<dd><a href="">酒店到家</a></dd>
+							<dd><a href="">游戏</a></dd>
+
+						</ol>
+						<ol>
+							<dd><a href="">白条</a></dd>
+							<dd><a href="">谷粒学院小金库</a></dd>
+							<dd><a href="">智能家电</a></dd>
+							<dd><a href="">水电煤</a></dd>
+							<dd><a href="">旅行</a></dd>
+							<dd><a href="">电影票</a></dd>
+							<dd><a href="">谷粒学院众测</a></dd>
+						</ol>
+					</div>
+
+
+					<div>
+						<h4>更多精选</h4>
+						<ol>
+							<dd><a href="">合作招商</a></dd>
+							<dd><a href="">谷粒学院E卡</a></dd>
+							<dd><a href="">服务市场</a></dd>
+							<dd><a href="">乡村招募</a></dd>
+							<dd><a href="">京友邦</a></dd>
+							<dd><a href="">智能社区</a></dd>
+							<dd><a href="">知识产权维权</a></dd>
+
+
+						</ol>
+						<ol>
+							<dd><a href="">谷粒学院通信</a></dd>
+							<dd><a href="">企业采购</a></dd>
+							<dd><a href="">办公生活馆</a></dd>
+							<dd><a href="">校园加盟</a></dd>
+							<dd><a href="">谷粒学院社区</a></dd>
+							<dd><a href="">游戏社区</a></dd>
+						</ol>
+					</div>
+				</div>
+
+			</li>
+			<li class="spacer"></li>
+			<li class="header-r-4"><a href="">手机谷粒学院</a>
+				<div class="aa h-r-1">
+
+					<div>
+						<div class="h-r-1img">
+							<img src="/confirm/img/59a51bf6Nb8e478cc.png"/>
+						</div>
+						<h4><a href="">手机谷粒学院</a></h4>
+						<p>新人专享大礼</p>
+						<div class="h-r-1img2">
+							<a href=""><img src="/confirm/img/8104b36ae6b72043ae838599d36d007d.png" alt=""/></a>
+							<a href=""><img src="/confirm/img/c0935b2c6504a5419e6ee507a5381bbe.png"/></a>
+							<a href=""><img src="/confirm/img/a64b429ebf83d2459a0a73830f4ad4c4.png"/></a>
+						</div>
+					</div>
+					<div>
+						<div class="h-r-1img">
+							<img src="/confirm/img/5874a54dNcec29924.jpg"/>
+						</div>
+						<h4><a href="">关注谷粒学院微信</a></h4>
+						<p>微信扫一扫关注新粉最高180元惊喜礼包</p>
+						<!--<div class="h-r-1img2">
+							<a href=""><img src="/confirm/image/8104b36ae6b72043ae838599d36d007d.png" alt="" /></a>
+							<a href=""><img src="/confirm/image/c0935b2c6504a5419e6ee507a5381bbe.png"/></a>
+							<a href=""><img src="/confirm/image/a64b429ebf83d2459a0a73830f4ad4c4.png"/></a>
+						</div>-->
+					</div>
+					<div>
+						<div class="h-r-1img">
+							<img src="/confirm/img/5874a555Ne8192324.jpg"/>
+						</div>
+						<h4><a href="">谷粒学院金融客户端</a></h4>
+						<p>新人专享大礼</p>
+						<div class="h-r-1img2">
+							<a href=""><img src="/confirm/img/8104b36ae6b72043ae838599d36d007d.png" alt=""/></a>
+							<a href=""><img src="/confirm/img/c0935b2c6504a5419e6ee507a5381bbe.png"/></a>
+							<a href=""><img src="/confirm/img/a64b429ebf83d2459a0a73830f4ad4c4.png"/></a>
+						</div>
+					</div>
+
+				</div>
+
+
+			</li>
+
+
+		</ul>
+		<div style="clear: both;"></div>
+	</div>
+
+
+</header>
+
+
+<!--<nav>-->
+<!--<ul>-->
+<!--<li><img src="/confirm/img/01.png" />谷粒学院首页</li>-->
+<!--<li class="in"><img src="/confirm/img/02.png" />北京-->
+<!--</li>-->
+<!--<li>尚硅谷<img src="/confirm/img/03.png" style="margin-bottom: -7px;margin-left: 3px;" /><img src="/confirm/img/06.png" /></li>-->
+<!--<li>|</li>-->
+<!--<li>我的订单</li>-->
+<!--<li>|</li>-->
+<!--<li>我的谷粒学院<img src="/confirm/img/06.png" style="margin-bottom: -4px;margin-left: 3px;" /></li>-->
+<!--<li>|</li>-->
+<!--<li>谷粒学院会员</li>-->
+<!--<li>|</li>-->
+<!--<li>企业采购</li>-->
+<!--<li>|</li>-->
+<!--<li>客户服务<img src="/confirm/img/06.png" style="margin-bottom: -4px;margin-left: 3px;" />-->
+
+<!--<ol class="ol">-->
+<!--<li>-->
+<!--<h4>客户</h4>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">帮助中心</p>-->
+<!--<p class="y">售后服务</p>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">在线客服</p>-->
+<!--<p class="y">意见建议</p>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">电话客服</p>-->
+<!--<p class="y">客服邮箱</p>-->
+<!--</li>-->
+<!--<li class="li">-->
+<!--<p class="z">金融资讯</p>-->
+<!--<p class="y">售全球客服</p>-->
+<!--</li>-->
+<!--<li class="li1">-->
+<!--<h4>商户</h4>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">合作招商</p>-->
+<!--<p class="y">学习中心</p>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">商家后台</p>-->
+<!--<p class="y">京麦工作台</p>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">商家帮助</p>-->
+<!--<p class="y">规则平台</p>-->
+<!--</li>-->
+<!--</ol>-->
+<!--<ol class="ol">-->
+<!--<li>-->
+<!--<h4>客户</h4>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">帮助中心</p>-->
+<!--<p class="y">售后服务</p>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">在线客服</p>-->
+<!--<p class="y">意见建议</p>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">电话客服</p>-->
+<!--<p class="y">客服邮箱</p>-->
+<!--</li>-->
+<!--<li class="li">-->
+<!--<p class="z">金融资讯</p>-->
+<!--<p class="y">售全球客服</p>-->
+<!--</li>-->
+<!--<li class="li1">-->
+<!--<h4>商户</h4>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">合作招商</p>-->
+<!--<p class="y">学习中心</p>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">商家后台</p>-->
+<!--<p class="y">京麦工作台</p>-->
+<!--</li>-->
+<!--<li>-->
+<!--<p class="z">商家帮助</p>-->
+<!--<p class="y">规则平台</p>-->
+<!--</li>-->
+<!--</ol>-->
+
+
+<!--</li>-->
+<!--<li>|</li>-->
+<!--<li>网站导航<img src="/confirm/img/06.png" style="margin-bottom: -4px;margin-left: 3px;" /></li>-->
+<!--<li>|</li>-->
+<!--<li>手机谷粒学院</li>-->
+<!--</ul>-->
+<!--</nav>-->
+
+<!--logo图片-->
+<div class="top-1">
+	<a th:href="${shopHomeUrl}"><img src="/confirm/img/logo1.jpg" class="img1"/></a><span>结算页</span>
+	<!--右侧绿色-->
+	<img src="/confirm/img/08.png" class="img2"/>
+</div>
+
+<!--主体部分-->
+<!--<p class="p1">填写并核对订单信息</p>-->
+<!--<div class="section">-->
+<!--&lt;!&ndash;收货人信息&ndash;&gt;-->
+<!--<div class="top-2">-->
+<!--<span>收货人信息</span>-->
+<!--<span>新增收货地址</span>-->
+<!--</div>-->
+
+<!--&lt;!&ndash;地址&ndash;&gt;-->
+<!--<div class="top-3">-->
+<!--<p>家里</p><span>齐天大圣  北京市  昌平区城区晨曦小区-16号楼 吉利大学  150****2245</span>-->
+<!--</div>-->
+<!--<p class="p2">更多地址︾</p>-->
+<!--<hr class="hh1" />-->
+<!--&lt;!&ndash;********************************************************************************************&ndash;&gt;-->
+<!--&lt;!&ndash;谷粒学院自提&ndash;&gt;-->
+<!--<div class="top-4">-->
+<!--<p>谷粒学院自提</p>-->
+<!--<p>省运费·无续重·随时取</p>-->
+<!--<p>详情</p>-->
+<!--</div>-->
+
+<!--&lt;!&ndash;地址&ndash;&gt;-->
+<!--<div class="top-5">-->
+<!--<p>北京昌平区</p><span>北京市  昌平区城区晨曦小区-16号楼 吉利大学  齐天大圣  150****2245</span><img src="/confirm/img/09.png" /><span>距收货人0米</span>-->
+<!--<p class="p3">距离最近</p><span>修改自提点</span>-->
+<!--</div>-->
+<!--<hr class="hh1" />-->
+
+<!--&lt;!&ndash;支付方式&ndash;&gt;-->
+<!--<h4 class="h4">支付方式</h4>-->
+<!--<div class="top-6">-->
+<!--<p>货到付款</p>-->
+<!--<p><span>惠</span>在线支付</p>-->
+<!--</div>-->
+<!--&lt;!&ndash;送货清单&ndash;&gt;-->
+<!--<h4 class="h4" style="margin-top: 5px;">送货清单</h4>-->
+<!--<div class="top_1">-->
+<!--<div class="to_left">-->
+<!--<h5>配送方式<span><img src="/confirm/img/i_03.png"/> 对应商品</span></h5>-->
+<!--<div class="box">-->
+<!--谷粒学院快递-->
+<!--</div>-->
+<!--<p class="biao">-->
+<!--<span class="til">标 准 达 ：</span>-->
+<!--<span class="con">预计 12月16日[今天] 15:00-19:00 送达</span>-->
+<!--<a href="#">修改</a>-->
+<!--</p>-->
+<!--<div class="updata-1">-->
+<!--<img src="/confirm/img/im_06.png" />-->
+<!--<span>京准达 标准达</span>-->
+<!--<span style="color: black;"> 配送服务全面升级</span>-->
+<!--</div>-->
+<!--<hr />-->
+<!--<p class="tui">-->
+<!--<span class="til">退换无忧：</span>-->
+<!--<span class="con">-->
+<!--<input type="checkbox" />-->
+<!--自签收后7天内退货，15天内换<span> ￥ 0.50</span><br />-->
+<!--<span class="nul">货，</span>可享1次上门取件服务 ﹀-->
+<!--</span>-->
+
+<!--<div class="updata-2">-->
+<!--<img src="/confirm/img/im_11.png" />-->
+<!--<span>京准达运费大促（限自营中小件）</span>-->
+<!--</div>-->
+
+<!--</p>-->
+<!--<p class="kg">总重量 :<span>0.095kg</span></p>-->
+<!--</div>-->
+<!--<div class="to_right">-->
+<!--<h5>商家：谷粒学院自营</h5>-->
+<!--<button>换购</button><span>已购满20.00元，再加49.90元，可返回购物车领取赠品</span>-->
+<!--&lt;!&ndash;图片&ndash;&gt;-->
+<!--<img src="/confirm/img/im_03.png" />-->
+<!--<div class="mi">-->
+<!--<p>小米（MI）小米手环2 智能运动 心率检测 来 <span style="color: red;"> ￥ 149.00</span> <span> x1 </span> <span>有货</span></p>-->
+<!--<p>电提醒 久坐提醒 LED显示器 时间显示 防水记 <span>0.095kg</span></p>-->
+<!--<p class="tui-1"><img src="/confirm/img/i_07.png" />支持7天无理由退货</p>-->
+<!--</div>-->
+<!--<hr />-->
+<!--<p>退换无忧 <span class="money">￥ 0.00</span></p>-->
+<!--</div>-->
+<!--</div>-->
+<!--<div class="bto">-->
+<!--<hr />-->
+<!--<h4 class="float">发票信息</h4>-->
+<!--<div class="note float"><img src="/confirm/img/i_11.png" /> 开企业抬头发票须填写纳税人识别号，以免影响报销</div>-->
+<!--<ul style="clear: both;">-->
+<!--<li>电子普通发票 <img src="/confirm/img/i_14.png" /></li>-->
+<!--<li>个人</li>-->
+<!--<li>商品明细</li>-->
+<!--<li>-->
+<!--<a href="">修改</a>-->
+<!--</li>-->
+<!--</ul>-->
+<!--<hr class="clear hr1" />-->
+<!--<h4 class="clear">使用优惠/礼品卡/抵用 ^</h4>-->
+<!--<ul>-->
+<!--<li class="red">优惠卡</li>-->
+<!--<li>礼品卡</li>-->
+<!--<li>京豆</li>-->
+<!--<li>余额</li>-->
+<!--<li>领奖码</li>-->
+<!--</ul>-->
+<!--<div class="tuijian clear">-->
+<!--<input type="checkbox" />-->
+<!--<span>优惠组合推荐</span>-->
+<!--</div>-->
+<!--</div>-->
+<!--<div class="xia">-->
+<!--<div class="qian">-->
+<!--<p class="qian_y">-->
+<!--<span>1</span>-->
+<!--<span>件商品，总商品金额：</span>-->
+<!--<span class="rmb">￥28.90</span>-->
+<!--</p>-->
+<!--<p class="qian_y">-->
+<!--<span>返现：</span>-->
+<!--<span class="rmb">  -￥0.00</span>-->
+<!--</p>-->
+<!--<p class="qian_y">-->
+<!--<span>运费： </span>-->
+<!--<span class="rmb"> &nbsp ￥0.00</span>-->
+<!--</p>-->
+<!--<p class="qian_y">-->
+<!--<span>服务费： </span>-->
+<!--<span class="rmb"> &nbsp ￥0.00</span>-->
+<!--</p>-->
+<!--<p class="qian_y">-->
+<!--<span>退换无忧： </span>-->
+<!--<span class="rmb"> &nbsp ￥0.00</span>-->
+<!--</p>-->
+
+<!--</div>-->
+
+<!--<div class="yfze">-->
+<!--<p class="yfze_a"><span>应付总额：</span><span class="hq">￥28.90</span></p>-->
+<!--<p class="yfze_b">寄送至： 北京 朝阳区 三环到四环之间 朝阳北路复兴国际大厦23层麦田房产 IT-中心研发二部 收货人：赵存权 188****5052</p>-->
+<!--</div>-->
+<!--<button class="tijiao">提交订单</button>-->
+<!--</div>-->
+<!--</div>-->
+<!--主体部分-->
+<p class="p1">填写并核对订单信息</p>
+<div class="section">
+	<!--收货人信息-->
+	<div class="top-2">
+		<span>收货人信息</span>
+		<span class="add-addr-btn" id="add-addr-btn">新增收货地址</span>
+	</div>
+
+	<!--地址：点击即选中，同时把收货人信息同步到最下面的「寄送至」-->
+	<div class="top-3 addr-item" th:each="addr:${orderConfirmData.memberAddressVos}"
+		 th:attr="data-id=${addr.id},data-name=${addr.name},data-phone=${addr.phone},
+		          data-province=${addr.province},data-city=${addr.city},data-region=${addr.region},
+		          data-detail=${addr.detailAddress},data-default=${addr.defaultStatus},
+		          data-address=${addr.province} + ${addr.city} + ${addr.region} + ${addr.detailAddress}">
+		<!-- def=1 标记选中的地址；data-addr-id 用于点击后回传给 /fare。
+		     商品数据【不】挂在这里：每个地址挂一份会成倍膨胀，統一用页面底部的 fareItems -->
+		<p th:attr="def=${addr.defaultStatus},data-addr-id=${addr.id}">[[${addr.name}]]</p><span>[[${addr.name}]]  [[${addr.province}]]  [[${addr.city}]]  [[${addr.region}]]  [[${addr.detailAddress}]]  [[${addr.phone}]]<b th:if="${addr.defaultStatus != null and addr.defaultStatus == 1}" style="color: #e1251b; font-weight: normal;">（默认地址）</b></span>
+		<a href="javascript:;" class="addr-edit-btn">修改</a>
+	</div>
+	<!-- 地址满 3 个才出现；点开显示全部，外层容器高度是 auto，会自动跟着长 -->
+	<p class="p2 more-addr-btn">更多地址 ▼</p>
+	<div class="hh1"/>
+
+	<!-- 新增收货地址弹窗（fixed 定位，不参与 .section 的布局） -->
+	<div class="addr-modal" id="addr-modal">
+		<div class="addr-modal-box">
+			<h4 id="addr-modal-title">新增收货地址</h4>
+			<!-- 编辑时存这条地址的 id；为空表示新增 -->
+			<input type="hidden" id="addr-id"/>
+			<p><label>收货人</label><input type="text" id="addr-name" maxlength="20" placeholder="收货人姓名"/></p>
+			<p><label>手机号</label><input type="text" id="addr-phone" maxlength="11" placeholder="11 位手机号"/></p>
+			<p class="addr-region-row">
+				<label>所在地区</label>
+				<select id="addr-province"><option value="">请选择省份</option></select>
+				<select id="addr-city"><option value="">请选择城市</option></select>
+				<select id="addr-region"><option value="">请选择区县</option></select>
+			</p>
+			<p><label>详细地址</label><input type="text" id="addr-detail" maxlength="60" placeholder="街道、门牌号"/></p>
+			<p class="addr-tip">必须是真实地址，否则货物无法送达，运费计算时按照本地市政府所在地计算！</p>
+			<p>
+				<label>默认地址</label>
+				<input type="checkbox" id="addr-default"/>
+				<span style="font-size: 12px; color: #999999;">勾选后下单时默认选中这个地址</span>
+			</p>
+			<div class="addr-modal-btns">
+				<button type="button" id="addr-cancel">取消</button>
+				<button type="button" id="addr-submit">保存</button>
+			</div>
+		</div>
+	</div>
+</div>
+<!--********************************************************************************************-->
+<!--谷粒学院自提-->
+<!--<div class="top-4">-->
+<!--	<p>谷粒学院自提</p>-->
+<!--	<p>省运费·无续重·随时取</p>-->
+<!--	<p class="xiang">详情</p>-->
+<!--</div>-->
+
+<!--地址-->
+<!--<div class="top-5">-->
+<!--	<p>北京昌平区</p><span>北京市  昌平区城区晨曦小区-16号楼 吉利大学  齐天大圣 150****2245</span><img-->
+<!--		src="/confirm/img/09.png"/><span>距收货人0米</span>-->
+<!--	<p class="p3">距离最近</p><span class="xiu">修改自提点</span>-->
+<!--</div>-->
+<!--<div class="hh1"/>-->
+<!--</div>-->
+
+<!--支付方式-->
+<h4 class="h4">支付方式</h4>
+
+<!-- 支付方式：点击切换，默认在线支付（只有它享受满 100 减 5） -->
+<div class="top-6">
+	<p class="pay-item" data-pay-type="offline">货到付款</p>
+	<p class="pay-item pay-selected" data-pay-type="online"><span>惠</span>在线支付</p>
+</div>
+<div class="hh1"></div>
+<!--送货清单-->
+<h4 class="h4" style="margin-top: 5px;">送货清单</h4>
+<div class="top_1">
+
+<!--	<div class="to_left">-->
+<!--		<h5><span class="peisong">配送方式</span><span class="dui"><img src="/confirm/img/i_03.png"/> 对应商品</span>-->
+<!--		</h5>-->
+<!--		<div class="box">-->
+<!--			谷粒学院快递-->
+<!--		</div>-->
+<!--		<p class="biao">-->
+<!--			<span class="til">标 准 达 ：</span>-->
+<!--			<span class="con">预计 12月16日[今天] 15:00-19:00 送达</span>-->
+<!--			<a href="#">修改</a>-->
+<!--		</p>-->
+<!--		<div class="updata-1">-->
+<!--			<img src="/confirm/img/im_06.png"/>-->
+<!--			<span>京准达 标准达</span>-->
+<!--			<span style="color: black;"> 配送服务全面升级</span>-->
+<!--		</div>-->
+<!--		<div class="hh1"></div>-->
+<!--		<p class="tui">-->
+<!--			<span class="til">退换无忧：</span>-->
+<!--			<span class="con">-->
+<!--							<input type="checkbox"/>-->
+<!--							自签收后7天内退货，15天内换<span style="font-size: 12px;margin-left: 5px"> ￥ 0.50</span><br/>-->
+<!--						<span class="nul">货，</span>可享1次上门取件服务 ﹀-->
+<!--						</span>-->
+
+<!--		<div class="updata-2">-->
+<!--			<img src="/confirm/img/im_11.png"/>-->
+<!--			<span>京准达运费大促（限自营中小件）</span>-->
+<!--		</div>-->
+
+<!--		</p>-->
+<!--		<p class="kg" style="color:#666666;margin-top: 13px;font-size: 12px">总重量 :<span-->
+<!--				style="color:#999999;font-size: 12px">[[${orderConfirmData.totalWeight}]]kg</span></p>-->
+<!--	</div>-->
+
+	<div class="to_right">
+		<h5>商家：谷粒学院自营</h5>
+		<div>
+			<button>换购</button>
+			<!-- 满 100 才提示返现，不满这一条不显示（判断在页面底部的脚本里） -->
+			<span id="cashback-tip" style="display: none;">已购满100.00元，返现5.00元，已从订单金额中扣除</span>
+		</div>
+
+		<!--商品列表：不足 3 件时高度自动收缩，超过 3 件才出滚动条-->
+		<div class="goods-scroll">
+			<div class="yun1" th:each="item:${orderConfirmData.items}" th:attr="data-sku-id=${item.skuId}">
+				<img th:src="${item.image}" class="yun"/>
+				<div class="mi">
+					<!-- 重量挪到标题后面、价格前面，固定两位小数 -->
+					<p>[[${item.title}]]<span>[[${#numbers.formatDecimal(item.weight, 1, 2)}]]kg</span>
+						<span style="color: red;"> ￥ [[${item.price}]]</span> <span> x[[${item.count}]] </span>
+						<span th:text="${item.stock == T(java.lang.Long).MAX_VALUE} ? '无货' : '有货'"></span>
+					</p>
+					<p class="tui-1"><img src="/confirm/img/i_07.png"/>支持7天无理由退货</p>
+
+					<!-- 运输信息：选好收货地址后由 /fare 接口回填（按 data-sku-id 找到这一行） -->
+					<table class="ship-info" style="display: none;">
+						<tr>
+							<td>发货地：</td><td class="ship-origin"></td>
+							<td class="ship-gap">距离：</td><td class="ship-distance"></td>
+							<td class="ship-gap">运输费：</td><td class="ship-fare"></td>
+						</tr>
+						<tr>
+							<td>预计送达：</td><td colspan="5" class="ship-time"></td>
+						</tr>
+					</table>
+				</div>
+			</div>
+		</div>
+
+		<div class="hh1"></div>
+		<!-- 退换无忧：勾选后 0.5 元计入最终金额 -->
+		<p class="tui">
+			<input type="checkbox" id="insurance"/>
+			<span class="til">退换无忧（￥ 0.50）：</span>
+			<span class="con">自签收后7天内退货，15天内换货，可享1次上门取件服务</span>
+			<span class="tui-fee"></span>
+		</p>
+	</div>
+</div>
+<div class="bto">
+	<div class="hh2"></div>
+	<h4 class="float">发票信息</h4>
+	<div class="note float"><img src="/confirm/img/i_11.png"/>
+		<span>开企业抬头发票须填写纳税人识别号，以免影响报销</span></div>
+	<ul style="clear: both;">
+		<li>电子普通发票 <img src="/confirm/img/i_14.png"/></li>
+		<li>个人</li>
+		<li>商品明细</li>
+		<li>
+			<a href="">修改</a>
+		</li>
+	</ul>
+	<div class="hh3"></div>
+	<h4 class="clear">使用优惠/礼品卡/抵用 ^</h4>
+	<ul>
+		<li class="red">优惠卡</li>
+		<li>礼品卡</li>
+		<li>京豆</li>
+		<li>余额</li>
+		<li>领奖码</li>
+	</ul>
+	<div class="tuijian clear">
+		<input type="checkbox"/>
+		<span>优惠组合推荐</span>
+	</div>
+</div>
+<div class="xia">
+	<!-- 用 table 把「文字列」和「金额列」分开：文字右对齐、金额右对齐，几行金额能对齐成一竖列 -->
+	<table class="fare-table">
+		<tr>
+			<td>[[${orderConfirmData.count}]] 件商品，总商品金额：</td>
+			<td class="amount" id="goods-total">￥[[${orderConfirmData.total}]]</td>
+		</tr>
+		<tr>
+			<td>返现<span class="tip">?<span class="tip-box">在线支付满100减5元</span></span>：</td>
+			<td class="amount" id="cashback">-￥0.00</td>
+		</tr>
+		<tr>
+			<td>运费<span class="tip">?<span class="tip-box">运费计算公式：<br/>1. 总重量 ≤ 3kg 时 0.5 元，之后每超过 0.5kg 额外加 0.05 元，封顶 20 元<br/>2. 运输路程 <= 10 公里时免运费，后续每增加 5 公里 额外支付 0.01 元，封顶 3 元</span></span>：</td>
+			<td class="amount" id="fare">￥0.00</td>
+		</tr>
+		<tr>
+			<td>服务费<span class="tip">?<span class="tip-box">无</span></span>：</td>
+			<td class="amount" id="service-fee">￥0.00</td>
+		</tr>
+		<tr>
+			<td>退换无忧<span class="tip">?<span class="tip-box">0.5 元服务，自签收后 7 天内退货，15 天内换货，可享 1 次上门取件服务</span></span>：</td>
+			<td class="amount" id="insurance-fee">￥0.00</td>
+		</tr>
+	</table>
+
+	<div class="yfze">
+		<p class="yfze_a"><span class="z">应付总额：</span><span class="hq" id="pay-total">￥[[${orderConfirmData.payPrice}]]</span></p>
+		<p class="yfze_b" id="ship-to">寄送至：</p>
+		<!-- 沙箱测试账号，仅用于开发环境；正式环境请删除 -->
+		<p class="yfze_b" style="color:#E31613;">
+			沙箱买家账号：cgmjok3411@sandbox.com　登录密码：111111　支付密码：111111
+		</p>
+	</div>
+	<!-- 提交订单用 ajax 而不是表单提交：后端异常时返回「toTrade?error=xxx」，
+	     用 ajax 才能拿到这个字符串弹窗提示，而不是整页跳走 -->
+	<div class="submit-area">
+		<!-- 提交时带上的页面状态。⚠️ 服务端会重新查询计算，这些值不能当准数 -->
+		<input id="addrIdInput" type="hidden"/>
+		<input id="goodsTotal" type="hidden"/>
+		<input id="freightInput" type="hidden"/>
+		<input id="payPriceInput" type="hidden"/>
+		<input id="orderTokenInput" type="hidden" th:value="${orderConfirmData.orderToken}"/>
+		<button class="tijiao" type="button" id="submit-order-btn">提交订单</button>
+	</div>
+
+</div>
+
+<div class="headera">
+	<!-- 统一居中容器：这里直接用内联样式，优先级最高，
+	     不会被 JD2.css 里任何 width / float 规则覆盖 -->
+	<div class="footer-inner" style="width: 1200px; max-width: 100%; margin: 0 auto; padding: 0 40px; box-sizing: border-box;">
+	<div class="Logo-tu">
+		<span><img src="/confirm/img/service_items_1.png"/></span>
+		<span><img src="/confirm/img/service_items_2.png"/></span>
+		<span><img src="/confirm/img/service_items_3.png"/></span>
+		<span><img src="/confirm/img/service_items_4.png"/></span>
+	</div>
+	<div class="table">
+		<dl>
+			<dt><a href="##">购物指南</a></dt>
+			<dd>
+				<a href="##">购物流程</a>
+			</dd>
+			<dd>
+				<a href="##">会员介绍</a>
+			</dd>
+			<dd>
+				<a href="##">生活旅行/团购</a>
+			</dd>
+			<dd>
+				<a href="##">常见问题</a>
+			</dd>
+			<dd>
+				<a href="##">大家电</a>
+			</dd>
+			<dd>
+				<a href="##">联系客服</a>
+			</dd>
+		</dl>
+		<dl>
+			<dt><a href="##">配送方式</a></dt>
+			<dd>
+				<a href="##">上门自提</a>
+			</dd>
+			<dd>
+				<a href="##">211限时达</a>
+			</dd>
+			<dd>
+				<a href="##">配送服务查询</a>
+			</dd>
+			<dd>
+				<a href="##"></a>
+			</dd>
+			<dd>
+				<a href="##">海外配送</a>
+			</dd>
+			<dd></dd>
+		</dl>
+		<dl>
+			<dt><a href="##">支付方式</a></dt>
+			<dd>
+				<a href="##">货到付款</a>
+			</dd>
+			<dd>
+				<a href="##">在线支付</a>
+			</dd>
+			<dd>
+				<a href="##">分期付款</a>
+			</dd>
+			<dd>
+				<a href="##">邮局汇款</a>
+			</dd>
+			<dd>
+				<a href="##">公司转账</a>
+			</dd>
+			<dd></dd>
+		</dl>
+		<dl>
+			<dt><a href="##">售后服务</a></dt>
+			<dd>
+				<a href="##">售后政策</a>
+			</dd>
+			<dd>
+				<a href="##">价格保护</a>
+			</dd>
+			<dd>
+				<a href="##">退款说明</a>
+			</dd>
+			<dd>
+				<a href="##">返修/退换货</a>
+			</dd>
+			<dd>
+				<a href="##">取消订单</a>
+			</dd>
+			<dd></dd>
+		</dl>
+		<dl class="dls">
+			<dt><a href="##">特色服务</a></dt>
+			<dd>
+				<a href="##">夺宝岛</a>
+			</dd>
+			<dd>
+				<a href="##">DIY装机</a>
+			</dd>
+			<dd>
+				<a href="##">延保服务</a>
+			</dd>
+			<dd>
+				<a href="##">谷粒学院E卡</a>
+			</dd>
+			<dd>
+				<a href="##">谷粒学院通信</a>
+			</dd>
+			<dd>
+				<a href="##">谷粒学院gulimall+</a>
+			</dd>
+		</dl>
+	</div>
+	<div class="guanyuwomen">
+		<ul>
+			<li>
+				<a href="##">关于我们</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">联系我们</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">联系客服</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">合作招商</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">商家帮助</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">营销中心</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">手机谷粒学院</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">友情链接</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">销售联盟</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">谷粒学院社区</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">风险检测</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">隐私政策</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">谷粒学院公益</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">English Site</a>
+			</li>
+			<li>|</li>
+			<li>
+				<a href="##">Mdeila $ IR</a>
+			</li>
+		</ul>
+	</div>
+	<p class="p1">
+		<a href="##"> 京公网安备 11000002000088号</a>|
+		<a href="##"> 京ICP证070359号</a>|
+		<a href="##"> 互联网药品信息服务资格证编号(京)-经营性-2014-0008 </a>|
+		<a href="##">新出发京零 字第大120007号</a>
+	</p>
+	<p class="p1">
+		<a href="##"> 互联网出版许可证编号新出网证(京)字150号</a>|
+		<a href="##"> 出版物经营许可证</a>|
+		<a href="##"> 网络文化经营许可证京网文 </a>|
+		<a href="##">[2014]2148-348号 </a>|
+		<a href="##"> 违法和不良信息举报电话 </a>|
+		<a href="##">：4006561155 </a>
+	</p>
+	<p class="p1">
+		<a href="##"> Copyright © 2004-2017 谷粒学院gulimall.com 版权所有</a>|
+		<a href="##"> 消费者维权热线：4006067733 经营证照</a>|
+	</p>
+	<p class="p1">
+		<a href="##"> 谷粒学院旗下网站：谷粒学院支付</a>|
+		<a href="##"> 谷粒学院云</a>
+	</p>
+	<p class="p3">
+		<img src="/confirm/img/54b8871eNa9a7067e.png"/>
+		<img src="/confirm/img/54b8872dNe37a9860.png"/>
+		<img src="/confirm/img/54b8875fNad1e0c4c.png"/>
+		<img src="/confirm/img/5698dc03N23f2e3b8.jpg"/>
+		<img src="/confirm/img/5698dc16Nb2ab99df.jpg"/>
+		<img src="/confirm/img/56a89b8fNfbaade9a.jpg"/>
+	</p>
+	</div>
+</div>
+<!-- 算运费只要商品的 id / 件数 / 重量：由 ConfirmController 提前挑好内联在这里。
+     页面上那些图片、标题、销售属性不参与请求，也不会跟着发回服务端 -->
+<script th:inline="javascript">
+    var fareItems = /*[[${fareItems}]]*/ [];
+    // ⚠️ 内联表达式只有放在 th:inline="javascript" 的 script 块里才会被解析，
+    //    所以商品总额在这里取，别挪到下面那个普通 <script> 里去（那样它会一直是 0）
+    var goodsTotal = Number(/*[[${orderConfirmData.total}]]*/ 0);
+</script>
+<script>
+    $(document).ready(function () {
+        $('.header-right li:nth-of-type(6)').hover(function () {
+            $('.header-r-11').css('display', 'block')
+        }, function () {
+            $('.header-r-11').css('display', 'none')
+        })
+        $('.header-right li:nth-of-type(12)').hover(function () {
+            $('.header-r-2').css('display', 'block')
+        }, function () {
+            $('.header-r-2').css('display', 'none')
+        })
+        $('.header-right li:nth-of-type(14)').hover(function () {
+            $('.header-r-3').css('display', 'block')
+        }, function () {
+            $('.header-r-3').css('display', 'none')
+        })
+        $('.header-l-2').hover(function () {
+            $('.header-l-d').css('display', 'block')
+        }, function () {
+            $('.header-l-d').css('display', 'none')
+        })
+        $('.header-r-4').hover(function () {
+            $('.h-r-1').css('display', 'block')
+        }, function () {
+            $('.h-r-1').css('display', 'none')
+        })
+        hightlight()
+    })
+
+	function hightlight() {
+        $(".addr-item p").css({"border": "2px solid gray"})
+		$(".addr-item p[def='1']").css({"border": "2px solid red"})
+	}
+
+    // ===== 收货地址选中 → 重新算运费 =====
+    // 请求发给自己所在的 order 服务（相对路径，同源、不用配跨域），order 再通过 Feign 调 ware
+    // ===== 金额汇总：返现 / 运费 / 服务费 / 退换无忧 一起算进应付总额 =====
+    var CASHBACK_THRESHOLD = 100;   // 满 100 元
+    var CASHBACK_AMOUNT = 5;        // 返 5 元
+    var INSURANCE_FEE = 0.5;        // 退换无忧
+    var fareTotal = 0;              // 运费，由 /fare 接口回填
+    var skuWareMap = {};            // skuId → 运费页选中的仓库 id
+    var insuranceOn = false;        // 退换无忧勾没勾
+    var payType = 'online';         // 支付方式，默认在线支付
+
+    function formatMoney(amount) {
+        return '￥' + Number(amount).toFixed(2);
+    }
+
+    // 只要金额有变化（算完运费 / 勾了退换无忧 / 换了支付方式）都走这里重算一遍
+    function renderAmounts() {
+        // 返现只给在线支付：货到付款时既不打折也不提示
+        var cashback = (payType === 'online' && goodsTotal >= CASHBACK_THRESHOLD) ? CASHBACK_AMOUNT : 0;
+        var insurance = insuranceOn ? INSURANCE_FEE : 0;
+        var pay = goodsTotal - cashback + fareTotal + insurance;
+
+        // 商品总额也统一成两位小数（服务端渲染出来的是 65228.0 这种，和别处格式不齐）
+        $('#goods-total').text(formatMoney(goodsTotal));
+        $('#cashback').text('-' + formatMoney(cashback));
+        $('#insurance-fee').text(formatMoney(insurance));
+        $('#pay-total').text(formatMoney(pay));
+
+        // 顺手把商品总额、应付总额同步给表单，提交订单时带走（服务端会重新算，这里只是个参考值）
+        $('#goodsTotal').val(goodsTotal.toFixed(2));
+        $('#freightInput').val(fareTotal.toFixed(2));
+        $('#payPriceInput').val(pay.toFixed(2));
+    }
+
+    // 返现提示：既要满 100，也要是在线支付 —— 两个条件缺一条这行就不出现
+    function renderCashbackTip() {
+        if (payType === 'online' && goodsTotal >= CASHBACK_THRESHOLD) {
+            $('#cashback-tip').show();
+        } else {
+            $('#cashback-tip').hide();
+        }
+    }
+
+    // 支付方式切换：点谁谁红框，提示和金额跟着重算
+    $('.top-6 .pay-item').click(function () {
+        $('.top-6 .pay-item').removeClass('pay-selected');
+        $(this).addClass('pay-selected');
+        payType = $(this).data('pay-type');
+        renderCashbackTip();
+        renderAmounts();
+    });
+
+    // 立刻先算一次：返现跟接口无关，页面一打开就该把 -5 元体现出来；
+    // 运费要等 /fare 回来后再触发一次重算
+    renderCashbackTip();
+    renderAmounts();
+
+    // 勾选退换无忧 → 0.5 元进总价
+    $('#insurance').change(function () {
+        insuranceOn = this.checked;
+        renderAmounts();
+    });
+
+    function loadFare(addrId) {
+        skuWareMap = {};
+        $.ajax({
+            url: '/fare',
+            type: 'POST',
+            contentType: 'application/json; charset=utf-8',
+            // 嵌套数组用 JSON body 传；拼成 items[0].skuId 那种表单键名又长又容易错
+            data: JSON.stringify({
+                addrId: addrId,
+                items: fareItems
+            }),
+            success: function (res) {
+                if (res && res.code === 0 && res.fare) {
+                    var fare = res.fare;
+
+                    // 逐个商品的运输明细：按 skuId 找到对应的商品行填进去
+                    $('.ship-info').hide();
+                    (fare.fares || []).forEach(function (item) {
+                        if (item.wareId != null) {
+                            skuWareMap[item.skuId] = item.wareId;
+                        }
+                        var $row = $('.yun1[data-sku-id="' + item.skuId + '"]');
+                        if (!$row.length) {
+                            console.warn('运输明细里的 skuId 在页面上找不到：', item.skuId);
+                            return;
+                        }
+                        $row.find('.ship-origin').text(item.originAddress || '');
+                        $row.find('.ship-distance').text(item.distance == null ? '' : item.distance + ' 公里');
+                        $row.find('.ship-fare').text(item.fare == null ? '' : formatMoney(item.fare));
+                        $row.find('.ship-time').text(item.timeInfo || '');
+                        $row.find('.ship-info').show();
+                    });
+
+                    // 整单运费进汇总
+                    fareTotal = Number(fare.totalFare || 0);
+                    $('#fare').text(formatMoney(fareTotal));
+                    renderAmounts();
+                } else {
+                    $('#fare').text('运费计算失败');
+                    console.error('运费计算失败：', res);
+                }
+            },
+            error: function (xhr) {
+                $('#fare').text('运费计算失败');
+                console.error('运费接口异常：', xhr);
+            }
+        });
+    }
+
+    // 把选中的收货人信息同步到最下面的「寄送至」（原来那行是空的）
+    function renderShipTo($addrItem) {
+        if (!$addrItem || !$addrItem.length) {
+            return;
+        }
+        $('#ship-to').text('寄送至：' + ($addrItem.data('address') || '')
+                + '　收货人：' + ($addrItem.data('name') || '')
+                + '　' + ($addrItem.data('phone') || ''));
+    }
+
+    /** 把当前选中的地址 id 同步给表单，提交订单时带走 */
+    function syncAddrId(addrId) {
+        $('#addrIdInput').val(addrId || '');
+    }
+
+    $(".addr-item p").click(function () {
+        $(".addr-item p").attr("def", "0");
+        $(this).attr("def", 1);
+        hightlight();
+
+        // 收货人信息跟着一起换
+        renderShipTo($(this).closest('.addr-item'));
+        syncAddrId($(this).attr('data-addr-id'));
+        loadFare($(this).attr("data-addr-id"));
+    });
+
+    // 地址满 2 个才出现「更多地址」，点开显示全部。
+    // 外层 .section 的高度是 auto，展开后边框会自动跟着长，不需要额外处理
+    (function () {
+        var $addressItems = $('.addr-item');
+        if ($addressItems.length < 2) {
+            return;
+        }
+
+        var expanded = false;
+        $addressItems.slice(2).hide();
+        // 用 .show 类显示：它是 <p>，直接 show()/改 display 会变成块级、撑满整行
+        $('.more-addr-btn').addClass('show');
+
+        $('.more-addr-btn').click(function () {
+            expanded = !expanded;
+            if (expanded) {
+                $addressItems.show();
+                $(this).text('收起地址 ▲');
+            } else {
+                $addressItems.slice(2).hide();
+                $(this).text('更多地址 ▼');
+            }
+        });
+    })();
+
+    // ===== 新增收货地址：省市区三级联动 + 提交 =====
+
+    // 全国省市区数据有 130 多 KB，首次打开弹窗时才去拿，不拖慢页面
+    var pcaData = null;
+
+    function loadPcaData(callback) {
+        if (pcaData) {
+            callback();
+            return;
+        }
+        $.getJSON('/confirm/js/pca-code.json', function (data) {
+            pcaData = data;
+            callback();
+        }).fail(function () {
+            alert('省市区数据加载失败，请刷新页面重试');
+        });
+    }
+
+    /**
+     * 直辖市：省下面没有地级市，中间直接是"市辖区"这一层。
+     * 用固定列表判断，比靠数据里的名字去猜可靠（重庆下面还混着"县"）
+     */
+    var MUNICIPALITIES = ['北京市', '上海市', '天津市', '重庆市'];
+
+    function isMunicipality(provinceName) {
+        return MUNICIPALITIES.indexOf(provinceName) >= 0;
+    }
+
+    /** 取下一级列表 */
+    function childrenOf(node) {
+        return (node && node.children) || [];
+    }
+
+    /** 直辖市的区县：数据是「北京市 → 市辖区 → 海淀区」，要再往下钻一层才是区 */
+    function districtsOf(province) {
+        var first = childrenOf(province)[0];
+        return (first && first.name === '市辖区') ? childrenOf(first) : [];
+    }
+
+    function findByName(list, name) {
+        var found = null;
+        (list || []).forEach(function (item) {
+            if (item.name === name) {
+                found = item;
+            }
+        });
+        return found;
+    }
+
+    function fillSelect($select, list, placeholder) {
+        var html = '<option value="">' + placeholder + '</option>';
+        (list || []).forEach(function (item) {
+            html += '<option value="' + item.name + '" data-code="' + item.code + '">' + item.name + '</option>';
+        });
+        $select.html(html);
+    }
+
+    // 新增：清空表单
+    $('#add-addr-btn').click(function () {
+        loadPcaData(function () {
+            $('#addr-id').val('');                    // 清掉 id → 提交时走新增接口
+            $('#addr-modal-title').text('新增收货地址');
+            $('#addr-name, #addr-phone, #addr-detail').val('');
+            $('#addr-default').prop('checked', false);
+            fillSelect($('#addr-province'), pcaData, '请选择省份');
+            // 「市」可能是上一次选直辖市时被禁用的，这里恢复可用
+            $('#addr-city').prop('disabled', false).html('<option value="">请选择城市</option>');
+            $('#addr-region').html('<option value="">请选择区县</option>');
+            $('#addr-modal').show();
+        });
+    });
+
+    /** 把下拉按名字选中（选项的 value 就是名字）；名字不在选项里时 val() 会给 null，兜成空串 */
+    function selectByName($select, name) {
+        $select.val(name || '');
+        if ($select.val() === null) {
+            $select.val('');
+        }
+    }
+
+    // 修改：把这条地址的数据全部回填到弹窗
+    // （用事件委托绑在 .addr-item 上；点击本身绑在 <p> 上，所以点「修改」不会顺带选中地址）
+    $('.addr-item').on('click', '.addr-edit-btn', function (e) {
+        e.stopPropagation();
+        var $item = $(this).closest('.addr-item');
+
+        loadPcaData(function () {
+            var province = $item.data('province') || '';
+            var city = $item.data('city') || '';
+            var region = $item.data('region') || '';
+
+            $('#addr-id').val($item.data('id'));
+            $('#addr-modal-title').text('修改收货地址');
+            $('#addr-name').val($item.data('name'));
+            $('#addr-phone').val($item.data('phone'));
+            $('#addr-detail').val($item.data('detail'));
+            $('#addr-default').prop('checked', Number($item.data('default')) === 1);
+
+            fillSelect($('#addr-province'), pcaData, '请选择省份');
+            selectByName($('#addr-province'), province);
+
+            var provinceNode = findByName(pcaData, province);
+            if (isMunicipality(province)) {
+                // 直辖市：市这一级置空禁用，区直接放第三个下拉
+                $('#addr-city').html('<option value="">（直辖市无市级）</option>').prop('disabled', true);
+                fillSelect($('#addr-region'), districtsOf(provinceNode), '请选择区县');
+            } else {
+                $('#addr-city').prop('disabled', false);
+                fillSelect($('#addr-city'), childrenOf(provinceNode), '请选择城市');
+                selectByName($('#addr-city'), city);
+
+                var cityNode = findByName(childrenOf(provinceNode), city);
+                fillSelect($('#addr-region'), childrenOf(cityNode), '请选择区县');
+            }
+            selectByName($('#addr-region'), region);
+
+            $('#addr-modal').show();
+        });
+    });
+
+    // 选省：直辖市没有"市"这一级 —— 把"市"下拉置空并禁用，区县直接填到第三个下拉
+    $('#addr-province').change(function () {
+        var provinceName = $(this).val();
+        var province = findByName(pcaData, provinceName);
+
+        if (isMunicipality(provinceName)) {
+            $('#addr-city').html('<option value="">（直辖市无市级）</option>').prop('disabled', true);
+            fillSelect($('#addr-region'), districtsOf(province), '请选择区县');
+        } else {
+            $('#addr-city').prop('disabled', false);
+            fillSelect($('#addr-city'), childrenOf(province), '请选择城市');
+            $('#addr-region').html('<option value="">请选择区县</option>');
+        }
+    });
+
+    $('#addr-city').change(function () {
+        var province = findByName(pcaData, $('#addr-province').val());
+        var city = findByName(childrenOf(province), $(this).val());
+        fillSelect($('#addr-region'), childrenOf(city), '请选择区县');
+    });
+
+    $('#addr-cancel').click(function () {
+        $('#addr-modal').hide();
+    });
+
+    // 点遮罩空白处也算关闭
+    $('#addr-modal').on('click', function (e) {
+        if (e.target === this) {
+            $(this).hide();
+        }
+    });
+
+    $('#addr-submit').click(function () {
+        var name = $.trim($('#addr-name').val());
+        var phone = $.trim($('#addr-phone').val());
+        var province = $('#addr-province').val();
+        var city = $('#addr-city').val();
+        var region = $('#addr-region').val();
+        var detail = $.trim($('#addr-detail').val());
+
+        if (!name) { alert('请填写收货人'); return; }
+        if (!/^1\d{10}$/.test(phone)) { alert('请填写正确的 11 位手机号'); return; }
+        // 直辖市只需要省 + 区；普通省份三级都要
+        if (!province || (!isMunicipality(province) && !city) || !region) {
+            alert('请选择完整的省市区');
+            return;
+        }
+        if (!detail) { alert('请填写详细地址'); return; }
+
+        // 直辖市时"市"是禁用的，val() 会给 null —— 统一成空字符串入库（不是 null）
+        city = city || '';
+
+        var addrId = $('#addr-id').val();
+
+        $.ajax({
+            // 带 id 走修改，不带 id 走新增
+            url: addrId ? '/address/update' : '/address/save',
+            type: 'POST',
+            contentType: 'application/json; charset=utf-8',
+            data: JSON.stringify({
+                id: addrId || null,
+                name: name,
+                phone: phone,
+                province: province,
+                city: city,
+                region: region,
+                detailAddress: detail,
+                areacode: $('#addr-region option:selected').data('code') || '',
+                defaultStatus: $('#addr-default').is(':checked') ? 1 : 0
+            }),
+            success: function (res) {
+                if (res && res.code === 0) {
+                    // 地址列表是服务端渲染的，刷新页面最省事，运费也会按新地址重算
+                    location.reload();
+                } else {
+                    alert((res && res.msg) || '保存失败，请稍后重试');
+                }
+            },
+            error: function () {
+                alert('保存失败，请检查网络后重试');
+            }
+        });
+    });
+
+    // 进页面先按默认地址算一次运费；一个默认地址都没有时，兜底选中第一个
+    (function () {
+        var $selected = $(".addr-item p[def='1']");
+        if (!$selected.length) {
+            $selected = $(".addr-item p").first().attr("def", "1");
+        }
+        hightlight();
+        if ($selected.length) {
+            renderShipTo($selected.closest('.addr-item'));
+            syncAddrId($selected.attr('data-addr-id'));
+            loadFare($selected.attr('data-addr-id'));
+        }
+    })();
+
+    // ===== 自定义提示弹窗（替代 alert）=====
+    var tipTimer = null;
+    function showTip(message) {
+        var $tip = $('#custom-tip');
+        if (!$tip.length) {
+            $('<div id="custom-tip" class="custom-tip">' +
+                    '<span class="custom-tip-icon">!</span>' +
+                    '<span class="custom-tip-text"></span>' +
+                '</div>').appendTo('body');
+            $tip = $('#custom-tip');
+        }
+        $tip.find('.custom-tip-text').text(message);
+        $tip.addClass('show');
+
+        clearTimeout(tipTimer);
+        tipTimer = setTimeout(function () {
+            $tip.removeClass('show');
+        }, 3000);
+    }
+
+    // ===== 提交订单 =====
+    $('#submit-order-btn').click(function () {
+        var addrId = $('#addrIdInput').val();
+        if (!addrId) {
+            showTip('请先选择收货地址');
+            return;
+        }
+
+        var $btn = $(this).prop('disabled', true).text('提交中…');
+
+        $.ajax({
+            url: '/submitOrder',
+            type: 'POST',
+            data: {
+                addrId: addrId,
+                orderToken: $('#orderTokenInput').val(),
+                goodsTotal: $('#goodsTotal').val(),
+                freightAmount: $('#freightInput').val(),
+                payPrice: $('#payPriceInput').val(),
+                // 后端约定：1=支付宝，4=货到付款
+                payType: payType === 'online' ? 1 : 4,
+                remarks: '',
+                // 运费页选中的仓库：{"skuId":wareId}
+                skuWareMap: JSON.stringify(skuWareMap)
+            },
+            success: function (url) {
+                // 正常下单返回支付页地址；异常返回 toTrade?error=xxx
+                if (!url) {
+                    showTip('下单成功，但未获取到支付页地址');
+                    return;
+                }
+
+                // 把错误信息从 URL 里解出来弹窗，不整页跳走
+                var encoded = url.indexOf('error=') >= 0 ? url.split('error=')[1] : '';
+                var error = encoded ? decodeURIComponent(encoded.replace(/\+/g, ' ')) : '';
+
+                if (error) {
+                    showTip(error);
+                } else {
+                    window.location.href = url;
+                }
+            },
+            error: function () {
+                showTip('提交订单失败，请检查网络后重试');
+            },
+            complete: function () {
+                $btn.prop('disabled', false).text('提交订单');
+            }
+        });
+    });
+
+</script>
+
+<script>
+(function () {
+    // 非首页：不自动定位，直接复用首页存进 Redis / cookie 的城市
+    function saveCity(city) {
+        if (!city) {
+            return;
+        }
+        fetch('/city/save', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
+            body: 'city=' + encodeURIComponent(city)
+        }).then(function (r) {
+            return r.json();
+        }).then(function (res) {
+            if (res && res.code === 0) {
+                location.reload();
+            }
+        }).catch(function () {});
+    }
+
+    function locate() {
+        if (!navigator.geolocation) {
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(function (pos) {
+            fetch('/location/reverse?lat=' + pos.coords.latitude + '&lng=' + pos.coords.longitude)
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.code === 0 && res.city) {
+                        saveCity(res.city);
+                    }
+                })
+                .catch(function () {});
+        }, function () {}, {timeout: 5000, maximumAge: 0});
+    }
+
+    // 地址下拉：省份动态加载 -> 城市 -> 保存
+    document.addEventListener('click', function (e) {
+        var province = e.target.closest('.city-option[data-code]');
+        if (province) {
+            e.preventDefault();
+            loadCities(province);
+            return;
+        }
+        var city = e.target.closest('.city-choice');
+        if (city) {
+            e.preventDefault();
+            saveCity(city.getAttribute('data-city') || city.textContent.trim(), true);
+            return;
+        }
+        var back = e.target.closest('.city-back');
+        if (back) {
+            e.preventDefault();
+            location.reload();
+            return;
+        }
+        var relocate = e.target.closest('.city-relocate');
+        if (relocate) {
+            e.preventDefault();
+            locate(true);
+            return;
+        }
+        var current = e.target.closest('.current-city');
+        if (current) {
+            e.preventDefault();
+            locate(true);
+        }
+    });
+
+    function loadCities(provinceLink) {
+        var code = provinceLink.getAttribute('data-code');
+        var provinceName = provinceLink.textContent.trim();
+        fetch('/region/cities?provinceCode=' + encodeURIComponent(code))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res || res.code !== 0 || !res.data) {
+                    return;
+                }
+                var box = provinceLink.closest('.header_head_p_cs')
+                    || provinceLink.closest('ol#beijing')
+                    || provinceLink.closest('.header-l-d ul');
+                if (!box) {
+                    return;
+                }
+                var listTag = box.tagName === 'OL' || box.tagName === 'UL';
+                var html = listTag
+                    ? '<li><a href="javascript:;" class="city-relocate">重新定位</a></li>'
+                      + '<li><a href="javascript:;" class="city-back">返回省份</a></li>'
+                    : '<a href="javascript:;" class="city-relocate" style="background:#C81623;color:#fff;">重新定位</a>'
+                      + '<a href="javascript:;" class="city-back">返回省份</a>';
+                res.data.forEach(function (c) {
+                    var name = (c.name === '市辖区' || c.name === '县') ? provinceName : c.name;
+                    var item = '<a href="javascript:;" class="city-choice" data-city="'
+                        + escapeHtml(name) + '">' + escapeHtml(name) + '</a>';
+                    html += listTag ? '<li>' + item + '</li>' : item;
+                });
+                box.innerHTML = html;
+            })
+            .catch(function () {});
+    }
+
+    function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+        });
+    }
+
+})();
+</script>
+    <!-- 谷粒商城 AI 助手：悬浮宠物 + 聊天窗 -->
+    <script src="/gulimall/agent/widget/chat-widget.js" defer></script>
+</body>
+
+</html>

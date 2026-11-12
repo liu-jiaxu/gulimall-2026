@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: gulimall-gateway
+
+  # Nacos 配置中心指定配置源（common 引入了 nacos-config，不配会启动报
+  # "No spring.config.import property has been defined"）
+  config:
+    import:
+      - optional:nacos:gulimall.yaml
+      # 导入网关配置 application-gateway.yaml。
+      # 本地 src/main/resources/application-gateway.yaml 是同内容模板，
+      # 上传到 Nacos 后该 import 优先级更高，会自动覆盖本地生效
+      - optional:nacos:application-gateway.yaml
+      - optional:file:./config/common.yaml
+      - optional:file:./config/${spring.application.name}.yaml
+      - optional:file:../config/common.yaml
+      - optional:file:../config/${spring.application.name}.yaml
+
+  # 激活 profile=gateway：开发期加载本地 application-gateway.yaml；
+  # 后期把该文件上传到 Nacos 后，由上面的 spring.config.import 覆盖
+#  profiles:
+#    include: gateway

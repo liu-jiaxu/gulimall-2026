@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: gulimall-coupon
+
+  # Nacos配置服务指定配置源
+  config:
+    import:
+      # 指定data-id
+      - optional:nacos:gulimall.yaml
+      # 使用通配符
+      - optional:nacos:${spring.application.name}.yaml
+      - optional:file:./config/common.yaml
+      - optional:file:./config/${spring.application.name}.yaml
+      - optional:file:../config/common.yaml
+      - optional:file:../config/${spring.application.name}.yaml

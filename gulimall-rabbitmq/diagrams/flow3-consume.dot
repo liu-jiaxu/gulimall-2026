@@ -1,0 +1,78 @@
+digraph consume {
+    rankdir=TB;
+    bgcolor="white";
+    splines=polyline;
+    nodesep=0.35;
+    ranksep=0.42;
+
+    node [shape=box, style="filled,rounded", fillcolor="#e7f3ff", color="#3d7eb8",
+          fontname="Microsoft YaHei", fontsize=11, margin="0.18,0.10"];
+    edge [color="#5a5a5a", arrowsize=0.8, penwidth=1.1, fontname="Microsoft YaHei", fontsize=9];
+
+    D0 [label="Broker 投递到\ngulimall-stock-release-queue", fillcolor="#d4edda", color="#28a745", penwidth=2];
+    D1 [label="StockReleaseListener.onStockRelease(Message, Channel)"];
+    D2 [label="objectMapper.readValue → StockReleaseMessage"];
+    D3 [label="StockReleaseExecutor.release(taskId)\n拿库存读锁 gulimall:ware:stock:lock", fillcolor="#fff3cd", color="#ffc107"];
+    D4 [label="WareSkuServiceImpl.releaseStock(taskId)"];
+    D5 [label="UPDATE wms_ware_order_task\nSET task_status=2\nWHERE id=? AND task_status=1", fillcolor="#fff3cd", color="#ffc107"];
+    D6 [label="查询明细 lock_status=1"];
+    D7 [label="UPDATE wms_ware_sku\nSET stock_locked=stock_locked-n\nWHERE ware_id=? AND sku_id=?"];
+    D8 [label="UPDATE wms_ware_order_task_detail\nSET lock_status=2"];
+    D9 [label="事务提交后 Redis INCRBY n"];
+    D10 [label="channel.basicAck(deliveryTag, false)", fillcolor="#d4edda", color="#28a745"];
+    D11 [label="消费完成", fillcolor="#d4edda", color="#28a745", penwidth=2];
+
+    D0 -> D1 -> D2 -> D3 -> D4 -> D5 -> D6 -> D7 -> D8 -> D9 -> D10 -> D11;
+    D5 -> D10 [label="影响行数 0：已处理过", style=dashed, color="#b8860b", fontcolor="#b8860b"];
+
+    F1 [label="MqRetryService.handleFailure(channel, message, e)", fillcolor="#f8d7da", color="#dc3545"];
+    F2 [label="MqRetryServiceImpl.handleFailure()", fillcolor="#f8d7da", color="#dc3545"];
+    F3 [label="readRetryCount(props)\nbuildReason(cause)"];
+    F4 [label="retryCount < MAX_RETRY(3) ?", shape=diamond, style="filled", fillcolor="#ffe8cc", color="#fd7e14", margin="0.05,0.03", width=3.0, height=1.2];
+
+    D4 -> F1 [label="业务抛异常", color="#dc3545", fontcolor="#dc3545", style=dashed];
+    F1 -> F2 -> F3 -> F4;
+
+    G1 [label="delayFor(retryCount) → 10s/30s/60s\nrepublishWithDelay(message, retryCount+1, delayMillis)", fillcolor="#fff3cd", color="#ffc107"];
+    G2 [label="复制原头部（__TypeId__、mq_message_id）\n+ x-delay + mq_retry_count"];
+    G3 [label="rabbitTemplate.send(\ngulimall-rabbitmq-retry-exchange, routingKey, ...)"];
+    G4 [label="延时到期后回到原队列", fillcolor="#fff3cd", color="#ffc107"];
+
+    F4 -> G1 [label="是：还能重试", color="#28a745", fontcolor="#28a745"];
+    G1 -> G2 -> G3 -> G4;
+    G4 -> D0 [style=dashed, color="#ffc107", label="重新投递"];
+
+    H1 [label="publishToDeadLetter(message, reason, retryCount)", fillcolor="#f8d7da", color="#dc3545"];
+    H2 [label="复制原头部 + mq_fail_reason\n+ mq_origin_exchange / mq_origin_routing_key"];
+    H3 [label="rabbitTemplate.send(\ngulimall-rabbitmq-dead-exchange, gulimall.rabbitmq.dead, ...)"];
+    H4 [label="进入 gulimall-rabbitmq-dead-queue", fillcolor="#f8d7da", color="#dc3545"];
+
+    F4 -> H1 [label="否：重试用尽", color="#dc3545", fontcolor="#dc3545"];
+    H1 -> H2 -> H3 -> H4;
+
+    G5 [label="channel.basicAck(deliveryTag, false)\n责任已转移，签收原消息"];
+    G3 -> G5;
+    H3 -> G5;
+    G5 -> D11;
+
+    I1 [label="nackToDeadLetter\nchannel.basicNack(tag, false, false)\n走队列 DLX 进死信队列", fillcolor="#fff3cd", color="#ffc107"];
+    F2 -> I1 [style=dashed, label="重发/投死信本身失败", color="#ffc107", fontcolor="#b8860b"];
+    I1 -> H4 [style=dashed];
+
+    subgraph cluster_dead {
+        label="死信归档";
+        style="filled,dashed"; fillcolor="#fff8f8"; color="#dc3545";
+        fontname="Microsoft YaHei"; fontsize=11;
+        J0 [label="MqDeadMessageListener.onDeadMessage(message, channel)", fillcolor="#ffe8cc", color="#fd7e14", penwidth=2];
+        J1 [label="读取 mq_retry_count / mq_fail_reason\n/ mq_origin_* / __TypeId__"];
+        J2 [label="MqDeadMessageServiceImpl.archive()\nINSERT INTO mq_dead_message"];
+        J3 [label="channel.basicAck\n（归档成功才签收）", fillcolor="#d4edda", color="#28a745"];
+        J4 [label="程序不再重试，等人工处理", fillcolor="#f8d7da", color="#dc3545", penwidth=2];
+        J0 -> J1 -> J2 -> J3 -> J4;
+    }
+    H4 -> J0;
+
+    K1 [label="归档失败（数据库挂了）\n不签收，消息留在死信队列", fillcolor="#fff3cd", color="#ffc107"];
+    J2 -> K1 [style=dashed, label="失败", color="#ffc107", fontcolor="#b8860b"];
+    K1 -> J0 [style=dashed];
+}

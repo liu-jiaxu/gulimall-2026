@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>com.atguigu.gulimall</groupId>
+		<artifactId>gulimall</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>gulimall-rocketmq</artifactId>
+	<name>gulimall-rocketmq</name>
+	<description>RocketMQ 示例/备用共通模块：发送模板 + 消费基类 + Topic/消费者组常量</description>
+
+	<dependencies>
+		<!-- RocketMQ：RocketMQTemplate / @RocketMQMessageListener -->
+		<dependency>
+			<groupId>org.apache.rocketmq</groupId>
+			<artifactId>rocketmq-spring-boot-starter</artifactId>
+			<version>2.3.1</version>
+		</dependency>
+
+		<!-- 只补 MqTemplate / AbstractMqListener 用到的 JSON，不依赖 gulimall-common，
+		     避免把 MyBatis/MySQL/Nacos/Shiro/Web 等一大堆依赖带进来 -->
+		<dependency>
+			<groupId>com.alibaba.fastjson2</groupId>
+			<artifactId>fastjson2</artifactId>
+			<version>2.0.58</version>
+		</dependency>
+	</dependencies>
+
+</project>

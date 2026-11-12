@@ -1,0 +1,244 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.atguigu.gulimall</groupId>
+		<artifactId>gulimall</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>gulimall-common</artifactId>
+	<description>各个微服务模块公共依赖模块</description>
+
+	<dependencies>
+
+		<!-- web 基础：jakarta.servlet + spring-web，供 shiro 过滤器/异常处理使用 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+			<version>3.5.16</version>
+		</dependency>
+		<dependency>
+			<groupId>jakarta.servlet</groupId>
+			<artifactId>jakarta.servlet-api</artifactId>
+			<version>5.0.0</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- 当前城市写 Redis。用 optional：只有已经引入 Redis 的模块（product/search/order 等）
+		     会拿到 RedisCityStore；coupon、third-party 不引 Redis，
+		     由 CityAutoConfiguration 退化成 CookieOnlyCityStore，
+		     不会被迫连接 localhost:6379，也不会有 Redis 健康检查告警。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+			<optional>true</optional>
+		</dependency>
+
+		<!-- 3.5.16版本以上包名发生变化，适配springboot4.x版本！	-->
+		<dependency>
+			<groupId>com.baomidou</groupId>
+			<artifactId>mybatis-plus-boot-starter</artifactId>
+			<version>3.5.16</version>
+		</dependency>
+		<!-- 覆盖 mybatis-plus 传递的老版 mybatis-spring(2.1.2)：升级到 3.0.6 以兼容 Spring 6.2 的
+		     SmartFactoryBean/factoryBeanObjectType 机制，否则启动报
+		     "Invalid value type for attribute 'factoryBeanObjectType': java.lang.String" -->
+		<dependency>
+			<groupId>org.mybatis</groupId>
+			<artifactId>mybatis-spring</artifactId>
+			<version>3.0.6</version>
+		</dependency>
+		<!-- mybatis-plus 分页依赖 -->
+		<dependency>
+			<groupId>com.baomidou</groupId>
+			<artifactId>mybatis-plus-jsqlparser</artifactId>
+			<version>3.5.16</version>
+			<scope>compile</scope>
+		</dependency>
+		<!-- mysql驱动 -->
+		<dependency>
+			<groupId>mysql</groupId>
+			<artifactId>mysql-connector-java</artifactId>
+			<version>8.0.32</version>
+		</dependency>
+
+		<!-- Source: https://mvnrepository.com/artifact/org.apache.httpcomponents/httpcore -->
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpcore</artifactId>
+			<version>4.4.16</version>
+			<scope>compile</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>commons-lang</groupId>
+			<artifactId>commons-lang</artifactId>
+			<version>2.6</version>
+		</dependency>
+
+		<!-- fastjson2：JSON 序列化。在此统一定义版本，各微服务通过传递依赖获取，无需重复声明 -->
+		<dependency>
+			<groupId>com.alibaba.fastjson2</groupId>
+			<artifactId>fastjson2</artifactId>
+			<version>2.0.58</version>
+		</dependency>
+
+		<!-- aop：让 AuthorizationAttributeSourceAdvisor 对 @RequiresPermissions 生效 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+			<version>3.5.16</version>
+		</dependency>
+		<!-- shiro 权限注解 + 权限拦截（Spring Boot 3 / jakarta.servlet 需要 jakarta classifier） -->
+		<dependency>
+			<groupId>org.apache.shiro</groupId>
+			<artifactId>shiro-core</artifactId>
+			<version>2.2.1</version>
+			<classifier>jakarta</classifier>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.shiro</groupId>
+			<artifactId>shiro-web</artifactId>
+			<version>2.2.1</version>
+			<classifier>jakarta</classifier>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.shiro</groupId>
+			<artifactId>shiro-spring</artifactId>
+			<version>2.2.1</version>
+			<classifier>jakarta</classifier>
+			<exclusions>
+				<!-- 排除传递的 javax 版本，统一用 jakarta -->
+				<exclusion>
+					<groupId>org.apache.shiro</groupId>
+					<artifactId>shiro-core</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.shiro</groupId>
+					<artifactId>shiro-web</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+
+		<!-- Spring Cloud Alibaba Nacos 注册中心（服务发现） -->
+		<dependency>
+			<groupId>com.alibaba.cloud</groupId>
+			<artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+			<exclusions>
+				<!-- 排除 Nacos 日志适配器：它会抢占并重载 logback 配置，覆盖应用自定义的 root 级别 -->
+				<exclusion>
+					<groupId>com.alibaba.nacos</groupId>
+					<artifactId>logback-adapter</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>com.alibaba.nacos</groupId>
+					<artifactId>nacos-log4j2-adapter</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<!-- Spring Cloud Alibaba Nacos 配置中心 -->
+		<dependency>
+			<groupId>com.alibaba.cloud</groupId>
+			<artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>com.alibaba.nacos</groupId>
+					<artifactId>logback-adapter</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>com.alibaba.nacos</groupId>
+					<artifactId>nacos-log4j2-adapter</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<!-- OpenFeign 远程调用 -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
+		<!-- LoadBalancer 负载均衡：OpenFeign 按服务名调用（@FeignClient）必需 -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-loadbalancer</artifactId>
+		</dependency>
+
+		<!--		&lt;!&ndash; Sentinel 限流 / 熔断 / 降级 &ndash;&gt;-->
+<!--		<dependency>-->
+<!--			<groupId>com.alibaba.cloud</groupId>-->
+<!--			<artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>-->
+<!--		</dependency>-->
+<!--		&lt;!&ndash; Seata 分布式事务 &ndash;&gt;-->
+<!--		<dependency>-->
+<!--			<groupId>com.alibaba.cloud</groupId>-->
+<!--			<artifactId>spring-cloud-starter-alibaba-seata</artifactId>-->
+<!--		</dependency>-->
+<!--		&lt;!&ndash; 调用链监控：Spring Cloud 2025.x 已弃用 Sleuth，改用 Micrometer Tracing + Brave/Zipkin &ndash;&gt;-->
+<!--		<dependency>-->
+<!--			<groupId>io.micrometer</groupId>-->
+<!--			<artifactId>micrometer-tracing-bridge-brave</artifactId>-->
+<!--		</dependency>-->
+<!--		<dependency>-->
+<!--			<groupId>io.zipkin.reporter2</groupId>-->
+<!--			<artifactId>zipkin-reporter-brave</artifactId>-->
+<!--		</dependency>-->
+
+		<!-- Jakarta Validation 参数校验 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+
+		<!-- lombok -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+		</dependency>
+
+		<!-- reactor-core：ControllerLogAspect 需要识别 Mono / Flux 返回值。
+		     只引核心包，不引 spring-boot-starter-webflux —— 各业务模块都是 MVC 应用，
+		     引入 webflux 只会平白多一套自动配置，没必要。版本由 BOM 管理 -->
+		<dependency>
+			<groupId>io.projectreactor</groupId>
+			<artifactId>reactor-core</artifactId>
+		</dependency>
+
+		<!-- test -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<dependencyManagement>
+		<dependencies>
+			<!-- Spring Boot BOM：统一管理 micrometer-tracing 等组件版本 -->
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>3.5.16</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<!-- Spring Cloud BOM：统一管理 openfeign/gateway/loadbalancer 等组件版本 -->
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>2025.0.3</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<!-- Spring Cloud Alibaba BOM：统一管理 Nacos/Sentinel/Seata 等组件版本。
+			     2025.0.0.0 适配 Spring Boot 3.5.x + Spring Cloud 2025.0.x -->
+			<dependency>
+				<groupId>com.alibaba.cloud</groupId>
+				<artifactId>spring-cloud-alibaba-dependencies</artifactId>
+				<version>2025.0.0.0</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+</project>

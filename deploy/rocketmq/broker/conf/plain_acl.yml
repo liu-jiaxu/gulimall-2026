@@ -1,0 +1,26 @@
+# ============================================================
+# RocketMQ ACL 1.0 账号清单（仅 5.3.2 及以下支持）
+# 挂到容器 /home/rocketmq/rocketmq-5.3.2/conf/plain_acl.yml
+# ------------------------------------------------------------
+# ⚠️ 部署前必做：把 secretKey 改成 config/docker-compose.env 里
+#    ROCKETMQ_SECRET_KEY 的值。三处必须完全一致：
+#      1) 本文件（Broker 校验）
+#      2) config/docker-compose.env（Dashboard 连接）
+#      3) config/common.yaml（Java 客户端）
+#    不一致的表现：AclException: No access key is configured / 认证失败。
+#
+# 💡 本文件支持热加载：改完直接生效，不用重启 broker。
+# ⚠️ 不要提交真实密码到 git；仓库里保留占位值，部署时在服务器上改。
+# ============================================================
+
+# 全局 IP 白名单：来自这些地址的请求【跳过 ACL 校验】
+# 只放 127.0.0.1（容器内自己），局域网客户端一律走账号密码
+globalWhiteRemoteAddresses:
+  - 127.0.0.1
+
+accounts:
+  # 项目统一用一个管理员账号，够开发/学习用；
+  # 生产建议按服务拆分账号，用 topicPerms / groupPerms 限制到最小权限
+  - accessKey: gulimall
+    secretKey: <your-password>
+    admin: true

@@ -1,0 +1,40 @@
+# ============================================================
+# gulimall-gateway 模块私有配置（网关）
+# 共用部分见同目录 common.yaml
+# ------------------------------------------------------------
+# 网关本身【没有】敏感信息 —— 路由全是 lb://服务名（走 Nacos 发现），不含任何 IP。
+# 建这个文件是为了保持"每个模块一个配置文件"的统一：
+# 以后网关注册了密钥、限流规则、或要单独指向另一套 Nacos 时，直接往这儿加。
+# ============================================================
+
+server:
+  port: 88   # 网关统一入口端口（可改）
+
+# ---------- 调用链：Micrometer Tracing + OTLP（Jaeger） ----------
+management:
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+
+# ---------- Sentinel：网关限流/熔断 ----------
+spring:
+  cloud:
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD}
+        port: 8719
+      eager: true
+      # 网关流控规则从 Nacos 读取
+      datasource:
+        gw-flow:
+          nacos:
+            server-addr: ${NACOS_ADDR}
+            data-id: gulimall-gateway-sentinel-gw-flow.json
+            group-id: SENTINEL_GROUP
+            data-type: json
+            rule-type: gw-flow
+            username: ${NACOS_USERNAME}
+            password: ${NACOS_PASSWORD}

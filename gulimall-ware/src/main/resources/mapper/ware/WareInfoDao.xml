@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.atguigu.gulimall.ware.dao.WareInfoDao">
+
+	<!-- 可根据自己的需求，是否要使用 -->
+    <resultMap type="com.atguigu.gulimall.ware.entity.WareInfoEntity" id="wareInfoMap">
+        <result property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="address" column="address"/>
+        <result property="areacode" column="areacode"/>
+    </resultMap>
+
+	<select id="getShippingFromList" resultType="com.atguigu.gulimall.api.ware.vo.SkuShippingFromVo">
+		SELECT ws.sku_id AS skuId,
+		       ws.ware_id AS wareId,
+		       wi.address AS address,
+		       COALESCE(ws.stock, 0) - COALESCE(ws.stock_locked, 0)
+		           - COALESCE(ws.seckill_stock_locked, 0) AS availableStock
+		FROM wms_ware_sku ws
+		INNER JOIN wms_ware_info wi ON ws.ware_id = wi.id
+		WHERE ws.sku_id IN
+		<foreach collection="items" item="item" open="(" separator="," close=")">
+			#{item.skuId}
+		</foreach>
+	</select>
+
+
+</mapper>

@@ -1,0 +1,96 @@
+# ============================================================
+# gulimall-seckill 模块私有配置（秒杀 / 复用 gulimall_sms 库）
+# 共用部分（MySQL/Redis/Nacos 地址）见同目录 common.yaml
+# ============================================================
+
+server:
+  port: 14000
+
+spring:
+  datasource:
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    # 秒杀场次、秒杀商品关系表在 gulimall_sms 库
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/gulimall_sms?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  # 和商城前台共享登录态
+  session:
+    timeout: 7d
+    redis:
+      namespace: ${SESSION_REDIS_NAMESPACE}
+
+  # 秒杀订单异步建单：手动 ack，失败交给 MqRetryService
+  rabbitmq:
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+
+  # Sentinel：客户端上报/规则拉取
+  cloud:
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD}
+        # 同一台机器上多个服务不能都用 8719
+        port: 8720
+      eager: true
+      # 规则持久化：从 Nacos 读取，客户端重启也不会丢
+      datasource:
+        flow:
+          nacos:
+            server-addr: ${NACOS_ADDR}
+            data-id: gulimall-seckill-sentinel-flow.json
+            group-id: SENTINEL_GROUP
+            data-type: json
+            rule-type: flow
+            username: ${NACOS_USERNAME}
+            password: ${NACOS_PASSWORD}
+        degrade:
+          nacos:
+            server-addr: ${NACOS_ADDR}
+            data-id: gulimall-seckill-sentinel-degrade.json
+            group-id: SENTINEL_GROUP
+            data-type: json
+            rule-type: degrade
+            username: ${NACOS_USERNAME}
+            password: ${NACOS_PASSWORD}
+        param-flow:
+          nacos:
+            server-addr: ${NACOS_ADDR}
+            data-id: gulimall-seckill-sentinel-param-flow.json
+            group-id: SENTINEL_GROUP
+            data-type: json
+            rule-type: param-flow
+            username: ${NACOS_USERNAME}
+            password: ${NACOS_PASSWORD}
+
+# Feign fallback 由 Sentinel 接管
+feign:
+  sentinel:
+    enabled: true
+
+gulimall:
+  # 消费端允许反序列化的消息包
+  rabbitmq:
+    trusted-packages: com.atguigu.gulimall.seckill.mq.message
+
+  seckill:
+    order:
+      # 抢购后多久没支付就归还库存；和订单超时保持一致，测试时可单独调小
+      pay-timeout-ms: ${gulimall.ware.stock-release.delay-ms:1800000}
+
+# ---------- 调用链：Micrometer Tracing + OTLP（Jaeger） ----------
+management:
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}

@@ -1,0 +1,72 @@
+server:
+  port: 20000
+
+spring:
+  # Redis —— 存短信验证码（连接信息在 config/common.yaml）
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  session:
+    timeout: 7d
+    redis:
+      # ⚠️ 必须与其它模块（如 product）一致 —— 这是 Redis 里会话的 key 前缀，
+      #    不一致就查不到同一个会话
+      namespace: ${SESSION_REDIS_NAMESPACE}
+
+  # ---------- OpenFeign 超时（只影响本服务作为调用方） ----------
+  # 登录时 auth-server 通过 Feign 调 member 的 /member/member/login；
+  # 登录成功后还会再查一次默认收货地址。
+  # common.yaml 的全局值是 2s/5s，服务刚启动、JIT 未预热时容易超时。
+  # 这里覆盖全局值：连接 5s、读取 20s。
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 5000
+            read-timeout: 20000
+
+# GitHub OAuth —— 具体值在 common.yaml（OAUTH_GITHUB_*），这里只做引用。
+# 注意：client-secret 不在这里引用 —— 发起授权只需要 client-id + redirect-uri，
+# secret 只在服务端换 token 时用，由 third-party 持有
+oauth:
+  github:
+    client-id: ${OAUTH_GITHUB_CLIENT_ID}
+    redirect-uri: ${OAUTH_GITHUB_REDIRECT_URI}
+  # 微信网页授权 —— 发起授权只需要 app-id 和 redirect-uri；
+  # app-secret 只在服务端换 token 时用，由 third-party 持有
+  wechat:
+    app-id: ${OAUTH_WECHAT_APP_ID}
+    redirect-uri: ${OAUTH_WECHAT_REDIRECT_URI}
+    scope: ${OAUTH_WECHAT_SCOPE}
+  # Gitee —— 同样只需要 client-id / redirect-uri / 授权页地址
+  gitee:
+    client-id: ${OAUTH_GITEE_CLIENT_ID}
+    redirect-uri: ${OAUTH_GITEE_REDIRECT_URI}
+    authorize-url: ${OAUTH_GITEE_AUTHORIZE_URL}
+
+# ---------- agent 专用 JWT：用户端签发 ----------
+gulimall:
+  agent:
+    jwt:
+      issuer: gulimall-auth-server
+      audience: gulimall-agent
+      cookie-name: AGENT_JWT_USER
+      cookie-domain: .gulimall.vip
+      cookie-path: /gulimall/agent/
+      cookie-secure: ${AGENT_JWT_COOKIE_SECURE}
+      ttl: 30m
+      key-id: user-2026-01
+      private-key-path: ${AGENT_JWT_USER_PRIVATE_KEY_PATH}
+
+# ---------- 调用链：Micrometer Tracing + OTLP（Jaeger） ----------
+management:
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}

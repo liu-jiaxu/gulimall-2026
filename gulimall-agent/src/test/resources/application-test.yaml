@@ -1,0 +1,37 @@
+# 集成测试专用配置。
+# 连接真实 MySQL/Redis/Nacos/MinIO/Milvus 和外部模型，不使用任何 mock。
+
+spring:
+  cloud:
+    nacos:
+      discovery:
+        # 测试上下文不注册到 Nacos，避免污染正在运行的 agent 实例；
+        # 其它微服务仍可被发现，Feign 调用走真实服务。
+        register-enabled: false
+  main:
+    banner-mode: off
+
+# 测试进程内临时关闭 Secure Cookie，真实 HTTP 调用才能完成登录态回传。
+# 不修改 config/common.yaml。
+AGENT_JWT_COOKIE_SECURE: false
+
+gulimall:
+  agent:
+    jwt:
+      # 兜底路径；测试基类会用 @DynamicPropertySource 写入绝对路径。
+      user-public-key-path: ../jwt/user/jwt_public.pem
+      admin-public-key-path: ../jwt/admin/jwt_public.pem
+  ai:
+    rag:
+      # 启动阶段不自动重建知识库，3.8 测试里显式调用 ingest/rebuild。
+      ingest-on-startup: false
+    defaults:
+      log-requests: false
+      log-responses: false
+      max-retries: 1
+
+logging:
+  level:
+    root: warn
+    com.atguigu.gulimall.agent: info
+    dev.langchain4j: warn

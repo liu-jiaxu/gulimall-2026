@@ -1,0 +1,45 @@
+# Seata Server 2.5.0 服务端配置
+# 由 docker-compose.yaml 挂载到容器 /seata-server/resources/application.yml
+# 注册中心走 Nacos（容器内服务名 nacos:8848）；配置直接读本文件
+server:
+  port: 7091
+
+spring:
+  main:
+    # apache/seata-server:2.5.0 的 JDK8 镜像不带 Servlet 容器；
+    # 这里只启动 TC（8091），不启动 7091 控制台。
+    # 需要控制台：改用 Seata 官方完整发行包
+    web-application-type: none
+
+# ServerRunner 通过 @Value("${logging.file.path}") 注入日志目录，
+# 本文件覆盖了镜像自带的 application.yml，必须自己提供，否则启动报
+# Could not resolve placeholder 'logging.file.path'
+logging:
+  file:
+    path: ${log.home:${user.home}/logs/seata}
+
+seata:
+  registry:
+    type: nacos
+    nacos:
+      application: seata-server
+      server-addr: nacos:8848
+      group: DEFAULT_GROUP
+      namespace: ""
+      cluster: default
+      username: nacos
+      password: <your-password>
+
+  config:
+    # 服务端配置直接读本文件；改用 Nacos 配置中心时把 type 改成 nacos，
+    # 并把 seata 服务端配置发布到 Nacos。
+    type: file
+
+  # 存储：file 模式（无需数据库即可运行；生产建议切换 db）
+  store:
+    mode: file
+
+  service:
+    # 事务分组 → 集群 映射：客户端配置的 tx-service-group 需与这里的 key 一致
+    vgroup-mapping:
+      gulimall_tx_group: default

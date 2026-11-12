@@ -1,0 +1,386 @@
+# mapping查看
+GET product
+DELETE product
+
+# 索引查看
+GET product/_search
+# 结果
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 11,
+      "relation": "eq"
+    },
+    "max_score": 1,
+    "hits": [
+      {
+        "_index": "product",
+        "_id": "5",
+        "_score": 1,
+        "_source": {
+          "skuId": 5,
+          "spuId": 6,
+          "skuTitle": "华为 Meta 30 Pro 黑色 新机 5888",
+          "skuPrice": 5888,
+          "skuImg": "/oss/gulimall/spu/2026-09-11/d77969035f9245bcac79b29a0ba3f8300d40c24b264aa511.jpg",
+          "saleCount": 0,
+          "hasStock": true,
+          "hotScore": 0,
+          "brandId": 1,
+          "catelogId": 225,
+          "brandName": "Huawei",
+          "brandImg": "/oss/gulimall/brand/2026-09-07/f64ccbd25d874ea5b16d486c39c1c2d1huawei.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "aaa"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "6",
+        "_score": 1,
+        "_source": {
+          "skuId": 6,
+          "spuId": 6,
+          "skuTitle": "华为 Meta 30 Pro 黑色 新机 6288",
+          "skuPrice": 6288,
+          "skuImg": "/oss/gulimall/spu/2026-09-11/d77969035f9245bcac79b29a0ba3f8300d40c24b264aa511.jpg",
+          "saleCount": 0,
+          "hasStock": false,
+          "hotScore": 0,
+          "brandId": 1,
+          "catelogId": 225,
+          "brandName": "Huawei",
+          "brandImg": "/oss/gulimall/brand/2026-09-07/f64ccbd25d874ea5b16d486c39c1c2d1huawei.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "aaa"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "7",
+        "_score": 1,
+        "_source": {
+          "skuId": 7,
+          "spuId": 6,
+          "skuTitle": "华为 Meta 30 Pro 白色 新机 5888",
+          "skuPrice": 5888,
+          "skuImg": "/oss/gulimall/spu/2026-09-11/d77969035f9245bcac79b29a0ba3f8300d40c24b264aa511.jpg",
+          "saleCount": 0,
+          "hasStock": true,
+          "hotScore": 0,
+          "brandId": 1,
+          "catelogId": 225,
+          "brandName": "Huawei",
+          "brandImg": "/oss/gulimall/brand/2026-09-07/f64ccbd25d874ea5b16d486c39c1c2d1huawei.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "aaa"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "8",
+        "_score": 1,
+        "_source": {
+          "skuId": 8,
+          "spuId": 6,
+          "skuTitle": "华为 Meta 30 Pro 白色 新机 6288",
+          "skuPrice": 6288,
+          "skuImg": "/oss/gulimall/spu/2026-09-11/d77969035f9245bcac79b29a0ba3f8300d40c24b264aa511.jpg",
+          "saleCount": 0,
+          "hasStock": false,
+          "hotScore": 0,
+          "brandId": 1,
+          "catelogId": 225,
+          "brandName": "Huawei",
+          "brandImg": "/oss/gulimall/brand/2026-09-07/f64ccbd25d874ea5b16d486c39c1c2d1huawei.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "aaa"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "9",
+        "_score": 1,
+        "_source": {
+          "skuId": 9,
+          "spuId": 6,
+          "skuTitle": "华为 Meta 30 Pro 绿色 新机 5888",
+          "skuPrice": 5888,
+          "skuImg": "/oss/gulimall/spu/2026-09-11/d77969035f9245bcac79b29a0ba3f8300d40c24b264aa511.jpg",
+          "saleCount": 0,
+          "hasStock": false,
+          "hotScore": 0,
+          "brandId": 1,
+          "catelogId": 225,
+          "brandName": "Huawei",
+          "brandImg": "/oss/gulimall/brand/2026-09-07/f64ccbd25d874ea5b16d486c39c1c2d1huawei.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "aaa"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "10",
+        "_score": 1,
+        "_source": {
+          "skuId": 10,
+          "spuId": 6,
+          "skuTitle": "华为 Meta 30 Pro 绿色 新机 6288",
+          "skuPrice": 6288,
+          "skuImg": "/oss/gulimall/spu/2026-09-11/d77969035f9245bcac79b29a0ba3f8300d40c24b264aa511.jpg",
+          "saleCount": 0,
+          "hasStock": true,
+          "hotScore": 0,
+          "brandId": 1,
+          "catelogId": 225,
+          "brandName": "Huawei",
+          "brandImg": "/oss/gulimall/brand/2026-09-07/f64ccbd25d874ea5b16d486c39c1c2d1huawei.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "aaa"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "11",
+        "_score": 1,
+        "_source": {
+          "skuId": 11,
+          "spuId": 7,
+          "skuTitle": "瑞士军刀 288",
+          "skuPrice": 288,
+          "skuImg": "/oss/gulimall/spu/2026-09-16/c7adbcb0affb447f84df6fa65ecb2f13%E7%91%9E%E5%A3%AB%E5%86%9B%E5%88%802.jpg",
+          "saleCount": 0,
+          "hasStock": false,
+          "hotScore": 0,
+          "brandId": 6,
+          "catelogId": 916,
+          "brandName": "瑞士军刀",
+          "brandImg": "/oss/gulimall/brand/2026-09-16/7b7ef15f931a4a32b1970dd45d1c0c06%E7%91%9E%E5%A3%AB%E5%86%9B%E5%88%80.jpg",
+          "catelogName": "军刀军具",
+          "attrs": [
+            {
+              "attrId": 9,
+              "attrName": "瑞士军刀颜色",
+              "attrValue": "银色"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "12",
+        "_score": 1,
+        "_source": {
+          "skuId": 12,
+          "spuId": 8,
+          "skuTitle": "iPhone8 Plus 黑色 新机 5500",
+          "skuPrice": 5500,
+          "skuImg": "/oss/gulimall/spu/2026-09-28/e9c5274fa0d64246909eeb51d28ba693a2c208410ae84d1f.jpg",
+          "saleCount": 0,
+          "hasStock": true,
+          "hotScore": 0,
+          "brandId": 7,
+          "catelogId": 225,
+          "brandName": "Apple",
+          "brandImg": "/oss/gulimall/brand/2026-09-28/4db56527133440d68d4e7fd4c4f82e06apple.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "bbb"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "13",
+        "_score": 1,
+        "_source": {
+          "skuId": 13,
+          "spuId": 8,
+          "skuTitle": "iPhone8 Plus 黑色 新机 6000",
+          "skuPrice": 6000,
+          "skuImg": "/oss/gulimall/spu/2026-09-28/e9c5274fa0d64246909eeb51d28ba693a2c208410ae84d1f.jpg",
+          "saleCount": 0,
+          "hasStock": false,
+          "hotScore": 0,
+          "brandId": 7,
+          "catelogId": 225,
+          "brandName": "Apple",
+          "brandImg": "/oss/gulimall/brand/2026-09-28/4db56527133440d68d4e7fd4c4f82e06apple.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "bbb"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "product",
+        "_id": "14",
+        "_score": 1,
+        "_source": {
+          "skuId": 14,
+          "spuId": 8,
+          "skuTitle": "iPhone8 Plus 红色 新机 5500",
+          "skuPrice": 5500,
+          "skuImg": "/oss/gulimall/spu/2026-09-28/6edd5238a3894684ba65cf99a0bd1dabccd1077b985c7150.jpg",
+          "saleCount": 0,
+          "hasStock": true,
+          "hotScore": 0,
+          "brandId": 7,
+          "catelogId": 225,
+          "brandName": "Apple",
+          "brandImg": "/oss/gulimall/brand/2026-09-28/4db56527133440d68d4e7fd4c4f82e06apple.png",
+          "catelogName": "手机",
+          "attrs": [
+            {
+              "attrId": 5,
+              "attrName": "主题颜色",
+              "attrValue": "青金"
+            },
+            {
+              "attrId": 1,
+              "attrName": "入网型号",
+              "attrValue": "bbb"
+            },
+            {
+              "attrId": 2,
+              "attrName": "上市年份",
+              "attrValue": "aaa"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

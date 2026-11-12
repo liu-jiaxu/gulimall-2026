@@ -1,0 +1,97 @@
+pipeline {
+    agent any
+
+    environment {
+        // 1. Docker Hub 公开仓库
+        IMAGE_REPO = 'liujiaxucn/gulimall-k8s'
+
+        // 2. 镜像 tag 在 Checkout 阶段拿到 GIT_COMMIT 后生成
+
+        // 3. k8s 命名空间和 Deployment 名称
+        K8S_NAMESPACE = 'gulimall-k8s'
+        K8S_DEPLOYMENT = 'gulimall-k8s'
+
+        // 4. Jenkins 凭据 ID
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        KUBECONFIG_CREDENTIALS_ID = 'kubeconfig-gulimall-k8s'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // 1. 拉取当前 Job 配置的 Git 分支
+                checkout scm
+
+                // 2. checkout 后 GIT_COMMIT 才有值，用它生成镜像 tag
+                script {
+                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'nogit'}"
+                }
+            }
+        }
+
+        stage('Maven Build') {
+            steps {
+                // 1. 进入独立模块目录构建，根 pom 不包含该模块
+                // 2. 运行单元测试，失败立即停止流水线
+                sh '''
+                  set -e
+                  cd gulimall-k8s
+                  mvn -B clean package
+                '''
+            }
+        }
+
+        stage('Docker Build and Push') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: env.DOCKER_CREDENTIALS_ID,
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    // 1. 用 Docker Hub Access Token 登录
+                    // 2. 构建版本 tag 和 latest
+                    // 3. 两个 tag 都推送
+                    sh '''
+                      set -e
+                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                      docker build -t "${IMAGE_REPO}:${IMAGE_TAG}" -t "${IMAGE_REPO}:latest" gulimall-k8s
+                      docker push "${IMAGE_REPO}:${IMAGE_TAG}"
+                      docker push "${IMAGE_REPO}:latest"
+                    '''
+                }
+            }
+        }
+
+        stage('Kubernetes Deploy') {
+            steps {
+                withCredentials([file(
+                    credentialsId: env.KUBECONFIG_CREDENTIALS_ID,
+                    variable: 'KUBECONFIG'
+                )]) {
+                    // 1. 先应用 Deployment/Service
+                    // 2. 把镜像改成这一次构建的版本 tag
+                    // 3. 等待滚动/重建完成
+                    sh '''
+                      set -e
+                      kubectl -n "${K8S_NAMESPACE}" apply -f gulimall-k8s/k8s/30-app.yaml
+                      kubectl -n "${K8S_NAMESPACE}" set image deployment/${K8S_DEPLOYMENT} app="${IMAGE_REPO}:${IMAGE_TAG}"
+                      kubectl -n "${K8S_NAMESPACE}" rollout status deployment/${K8S_DEPLOYMENT} --timeout=180s
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            // 1. 无论成功失败都退出 Docker 登录
+            sh 'docker logout || true'
+        }
+        success {
+            echo "部署成功：${IMAGE_REPO}:${IMAGE_TAG}"
+        }
+        failure {
+            echo "流水线失败，查看 Jenkins 控制台、kubectl describe 和 kubectl logs"
+        }
+    }
+}

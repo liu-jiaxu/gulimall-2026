@@ -1,0 +1,59 @@
+# ============================================================
+# Kibana 8.18.8 服务端配置
+#
+# 挂载到容器内 /usr/share/kibana/config/kibana.yml
+#
+# ⚠️ 挂载是【覆盖】关系：镜像自带的同名文件会被本文件整个替换
+# ⚠️ 首次启动前宿主必须【已存在】本文件 —— 若不存在，Docker 会把它
+#    创建成一个同名【目录】，Kibana 启动会报配置读取错误
+# ⚠️ 改完要 docker compose restart kibana 才生效
+#
+# 说明：Kibana 配置项统一写在本文件；compose 的 environment 只保留 TZ
+# ============================================================
+
+# 监听地址：监听容器内所有网卡，宿主 5601 端口映射才能通
+server.host: "0.0.0.0"
+server.name: "gulimall-kibana"
+
+# ---------------- Elasticsearch 连接 ----------------
+# 写 compose 网络内的服务名，不要写 localhost（那是 Kibana 容器自己）
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+
+# Kibana 服务端连 ES 的账号：必须是内置的 kibana_system
+# ⚠️ 不能用 elastic 超级用户 —— Kibana 8.x 配置校验会直接 FATAL 拒绝启动：
+#    value of "elastic" is forbidden. This is a superuser account that cannot
+#    write to system indices that Kibana needs to function.
+# 首次使用前需先给该用户设密码（ES 内置该用户但默认无密码）：
+#   curl -u elastic:<ELASTIC_PASSWORD> -H 'Content-Type: application/json' \
+#     -X POST 'http://<IP>:9200/_security/user/kibana_system/_password' \
+#     -d '{"password":"<给 kibana_system 设的密码>"}'
+# 注意区分：这是【Kibana 连 ES】的账号；浏览器登录 Kibana 界面用的仍是 elastic
+elasticsearch.username: "kibana_system"
+# elasticsearch.password 由 compose 的环境变量 ELASTICSEARCH_PASSWORD 提供（见 docker-compose.yaml）
+# Kibana 支持用「大写设置名」的环境变量覆盖 kibana.yml，所以明文密码不再写在这里
+
+# ---------------- 加密密钥（生产必配）----------------
+# 不配的后果：Kibana 每次启动随机生成一把，重启后已登录会话全部失效，
+#            且依赖加密存储的功能（告警 alerting、动作 actions 等）被禁用。
+#
+# ⚠️ 这三个 key 用于加密 Kibana 持久化的敏感数据，务必注意：
+#    - 泄露：任何拿到它的人都能解密这些数据，切勿提交到公开仓库
+#    - 丢失：已加密的数据将无法还原，务必妥善备份
+#    - 生产环境每个部署实例应各自独立生成，不要多实例共用一个值
+#
+# 重新生成方式：
+#   docker compose exec kibana bin/kibana-encryption-keys generate
+#   或 openssl rand -base64 32   （每个 key 分别生成一次）
+xpack.security.encryptionKey: "<your-kibana-encryption-key>"
+xpack.encryptedSavedObjects.encryptionKey: "<your-kibana-encryption-key>"
+xpack.reporting.encryptionKey: "<your-kibana-encryption-key>"
+
+# ---------------- 会话安全 ----------------
+# 当前 ES 走 http 明文（xpack.security.http.ssl.enabled: false），Kibana 也只能
+# 用 http 提供服务，因此登录 cookie 只能明文传输，启动日志会有一条对应告警。
+# 生产环境应给 Kibana 与 ES 都配置 TLS（server.ssl.* / elasticsearch.ssl.*）后，
+# 把下面这项设为 true（届时告警消失，cookie 只在 HTTPS 下发送）。
+xpack.security.secureCookies: false
+
+# ---------------- 界面 ----------------
+i18n.locale: zh-CN

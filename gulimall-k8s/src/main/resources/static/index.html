@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gulimall-k8s AI 对话</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<!-- ============================================================
+     登录 / 注册
+     ============================================================ -->
+<section id="auth-view" class="auth-view">
+    <div class="auth-card">
+        <h1>gulimall-k8s AI</h1>
+        <p class="subtitle">k8s + Jenkins CI/CD 练习服务</p>
+
+        <div class="tabs">
+            <button type="button" class="tab active" data-mode="login">登录</button>
+            <button type="button" class="tab" data-mode="register">注册</button>
+        </div>
+
+        <form id="auth-form" class="auth-form">
+            <label>
+                用户名
+                <input id="auth-username" maxlength="32" autocomplete="username" required>
+            </label>
+            <label>
+                密码
+                <input id="auth-password" type="password" maxlength="64" autocomplete="current-password" required>
+            </label>
+            <label>
+                邀请码
+                <input id="auth-invite-code" maxlength="64" autocomplete="off" placeholder="请输入登录邀请码" required>
+            </label>
+            <p class="hint">登录和注册都需要邀请码。</p>
+            <label id="display-name-row" class="hidden">
+                展示名（可选）
+                <input id="auth-display-name" maxlength="64">
+            </label>
+
+            <p id="auth-error" class="error hidden"></p>
+            <button type="submit" id="auth-submit" class="primary">登录</button>
+        </form>
+
+        <button type="button" id="forgot-link" class="link">忘记密码</button>
+    </div>
+</section>
+
+<!-- ============================================================
+     聊天主界面
+     ============================================================ -->
+<section id="chat-view" class="chat-view hidden">
+    <aside class="sidebar">
+        <div class="sidebar-head">
+            <div class="brand">gulimall-k8s AI</div>
+            <button type="button" id="new-chat" class="primary small">+ 新对话</button>
+        </div>
+
+        <div id="conversation-list" class="conversation-list"></div>
+
+        <div class="sidebar-foot">
+            <span id="current-user" class="current-user"></span>
+            <button type="button" id="logout" class="link">退出</button>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="chat-head">
+            <select id="model-select" aria-label="选择模型"></select>
+            <span id="chat-status" class="status"></span>
+        </header>
+
+        <div id="message-list" class="message-list">
+            <div class="empty-state" id="empty-state">
+                <h2>开始一段新对话</h2>
+                <p>输入问题，AI 会保留最近 3 天的会话记录。</p>
+            </div>
+        </div>
+
+        <form id="chat-form" class="composer">
+            <textarea id="message-input" rows="2" maxlength="4000"
+                      placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+            <button type="submit" id="send-button" class="primary">发送</button>
+        </form>
+    </main>
+</section>
+
+<!-- ============================================================
+     忘记密码弹窗
+     ============================================================ -->
+<div id="reset-modal" class="modal hidden">
+    <div class="modal-card">
+        <h3>修改密码</h3>
+        <p class="hint">直接输入用户名和新密码即可修改，没有验证码。</p>
+
+        <label>
+            用户名
+            <input id="reset-username" maxlength="32">
+        </label>
+        <label>
+            新密码
+            <input id="reset-password" type="password" maxlength="64">
+        </label>
+        <label>
+            确认新密码
+            <input id="reset-password2" type="password" maxlength="64">
+        </label>
+
+        <p id="reset-error" class="error hidden"></p>
+
+        <div class="modal-actions">
+            <button type="button" id="reset-cancel" class="secondary">取消</button>
+            <button type="button" id="reset-submit" class="primary">修改</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

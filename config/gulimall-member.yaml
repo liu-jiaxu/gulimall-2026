@@ -1,0 +1,48 @@
+# ============================================================
+# gulimall-member 模块私有配置（会员 / gulimall_ums 库）
+# 共用部分见同目录 common.yaml
+# ============================================================
+
+# common中自定义鉴权配置
+#gulimall:
+#  shiro:
+#    enabled: true          # 开启拦截
+#    permissions: member:growthchangehistory:list,member:growthchangehistory:info   # 当前用户权限（逗号分隔）
+#    permission-all: true   # 开发期放行所有权限（可选）
+
+server:
+  port: 8000
+
+spring:
+  # Redis + Spring Session：会话存 Redis，才能读到 auth-server 登录时写进去的会员信息。
+  # 三个 SESSION_* 值都来自 common.yaml，必须和其它模块完全一致，否则读的是另一个会话
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  session:
+    timeout: 7d
+    redis:
+      namespace: ${SESSION_REDIS_NAMESPACE}
+
+  datasource:
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    # 参数	                                    作用
+    # useUnicode=true&characterEncoding=UTF-8	防止中文乱码
+    # serverTimezone=Asia/Shanghai	            必须设置，否则报时区错误
+    # allowPublicKeyRetrieval=true	            必须设置，否则报公钥检索错误
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/gulimall_ums?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    # mysql8.0
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# ---------- 调用链：Micrometer Tracing + OTLP（Jaeger） ----------
+management:
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}

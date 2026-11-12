@@ -1,0 +1,24 @@
+hosts仅供本地测试使用，实际部署后应该全部配置到Cloudflare Tunnel的Route中
+<your-vm-host-ip>  gulimall.vip
+<your-vm-host-ip>  admin.gulimall.vip
+<your-vm-host-ip>  img.gulimall.vip
+<your-vm-host-ip>  search.gulimall.vip
+<your-vm-host-ip>  auth.gulimall.vip
+<your-vm-host-ip>  cart.gulimall.vip
+<your-vm-host-ip>  order.gulimall.vip
+<your-vm-host-ip>  pay.gulimall.vip
+<your-vm-host-ip>  seckill.gulimall.vip
+<your-vm-host-ip>  member.gulimall.vip
+
+Cloudflare Tunnel的Route配置
+Subdomain	    Domain	Path	Type	    Service URL
+留空（根域名）	gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+admin	        gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+img	            gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+search	        gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+auth	        gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+cart	        gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+order	        gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+seckill	        gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+member	        gulimall.vip	留空	HTTP	http://<your-vm-host-ip>:80
+pay	            gulimall.vip	留空	HTTP	http://localhost:9000

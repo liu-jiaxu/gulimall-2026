@@ -1,0 +1,371 @@
+# ============================================================
+# 所有模块【共用】的真实配置 —— 中间件地址与凭据
+# ------------------------------------------------------------
+# ⚠️ 键名用【大写下划线】，模块的 application.yaml 里用 ${KEY:默认值} 引用。
+#    原理：config/*.yaml 里的 key 会进 Spring 的 Environment，
+#    ${MYSQL_HOST} 从 Environment 解析 —— 不一定非得是操作系统环境变量，
+#    配置文件里定义的 property 一样取得到。
+# ============================================================
+
+# ---------- MySQL ----------
+MYSQL_HOST: <your-vm-host-ip>
+MYSQL_PORT: 3306
+MYSQL_USERNAME: root
+MYSQL_PASSWORD: <your-password>
+
+# ---------- Nacos（注册中心 + 配置中心） ----------
+NACOS_ADDR: <your-vm-host-ip>:8848
+
+# ---------- Redis ----------
+REDIS_HOST: <your-vm-host-ip>
+REDIS_PORT: 6379
+REDIS_PASSWORD: <your-password>
+
+# ---------- OpenTelemetry / Jaeger ----------
+# 开发环境全量采样；生产按流量调低，例如 0.1
+OTEL_TRACING_SAMPLING: 1.0
+# Java 服务统一发到 Jaeger 的 OTLP HTTP 入口
+OTEL_EXPORTER_OTLP_ENDPOINT: http://${MYSQL_HOST}:4318/v1/traces
+
+# ---------- Sentinel ----------
+SENTINEL_DASHBOARD: <your-vm-host-ip>:8858
+# Nacos 认证信息（规则的 Nacos 数据源要用）
+NACOS_USERNAME: nacos
+NACOS_PASSWORD: <your-password>
+
+# ---------- Elasticsearch ----------
+# （原来放在 Nacos 的 gulimall-search.yaml 里）
+ES_URIS: http://<your-vm-host-ip>:9200
+ES_USERNAME: elastic
+ES_PASSWORD: <your-password>
+
+# ---------- MinIO 对象存储 ----------
+# （原来放在 Nacos 的 gulimall-third-party.yaml 里）
+MINIO_ENDPOINT: http://<your-vm-host-ip>:19000
+MINIO_ACCESS_KEY: admin
+MINIO_SECRET_KEY: <your-password>
+MINIO_BUCKET: gulimall
+MINIO_PUBLIC_PREFIX: /oss
+
+# GitHub OAuth2 登录凭据
+OAUTH_GITHUB_CLIENT_ID: <your-github-client-id>
+OAUTH_GITHUB_CLIENT_SECRET: <your-github-client-secret>
+# GitHub 授权回调地址 —— 必须与 GitHub 后台登记的 Redirect URI 完全一致，
+# 差一个字符就报 redirect_uri_mismatch
+OAUTH_GITHUB_REDIRECT_URI: http://auth.gulimall.vip/oauth2/github/success
+
+# ---------- Gitee OAuth2（GitHub 的国内替代：不用挂梯子） ----------
+# 申请入口：https://gitee.com/oauth/applications
+# 登录 Gitee → 个人中心 → 设置 → OAuth 应用设置 → 新建应用
+# 创建时「应用回调地址」填：http://auth.gulimall.vip/oauth2/gitee/success
+#   （和 GitHub 一样要求完全一致，差一个字符就报回调地址不匹配）
+OAUTH_GITEE_CLIENT_ID: <your-gitee-client-id>
+OAUTH_GITEE_CLIENT_SECRET: <your-gitee-client-secret>
+OAUTH_GITEE_REDIRECT_URI: http://auth.gulimall.vip/oauth2/gitee/success
+# Gitee 的服务端接口（换 token / 取用户）都在这个域名下
+OAUTH_GITEE_BASE_URL: https://gitee.com
+# 授权页地址 —— 浏览器要跳过去的那个
+OAUTH_GITEE_AUTHORIZE_URL: https://gitee.com/oauth/authorize
+
+# ---------- 微信网页授权（公众平台【测试号】） ----------
+# ⚠️ 测试号只能用于开发调试，【不能上线】。上线要么是认证服务号，
+#    要么是开放平台的「网站应用」（后者需要企业资质 + 300 元/年）
+OAUTH_WECHAT_APP_ID: <your-wechat-app-id>
+OAUTH_WECHAT_APP_SECRET: <your-wechat-app-secret>
+# 回调地址：域名部分必须与测试号后台【网页服务 → 授权回调页面域名】里填的一致
+# ⚠️ 微信那边的域名配置【不能带端口】，只填 auth.gulimall.vip
+# ⚠️ 登录页走 HTTPS，微信回调也必须用 HTTPS，否则微信内授权会被拦截
+OAUTH_WECHAT_REDIRECT_URI: https://auth.gulimall.vip/oauth2/wechat/success
+# 授权范围：snsapi_base 静默授权（只有 openid）；snsapi_userinfo 弹授权页（能拿昵称头像）
+OAUTH_WECHAT_SCOPE: snsapi_userinfo
+
+# ---------- 百度地图（third-party 物流距离计算） ----------
+# 申请 / 管理入口：https://lbsyun.baidu.com/apiconsole/key
+# ⚠️ 拿到 AK 后必须在控制台给它勾选这两个服务，否则接口一律返回 status=3（权限校验失败）：
+#     ① 地理编码（地址 → 经纬度）
+#     ② 批量算路 · 驾车（两个坐标 → 驾车距离）
+BAIDU_MAP_AK: <your-baidu-map-ak>
+
+# ---------- Spring Session（跨子域共享登录态） ----------
+# ⚠️ 下面三个值必须【所有需要共享登录态的模块完全一致】，否则各模块读到的是
+#    彼此独立的会话 —— 表现就是"在 auth.gulimall.vip 登录了，回 gulimall.vip
+#    首页仍然是未登录"。目前使用方：gulimall-auth-server、gulimall-product
+#
+# Redis 里会话的 key 前缀
+SESSION_REDIS_NAMESPACE: gulimall:session
+# 会话 cookie 的 domain —— 对 gulimall.vip 及其所有子域生效
+SESSION_COOKIE_DOMAIN: gulimall.vip
+# 会话 cookie 的名字
+SESSION_COOKIE_NAME: GULIMALLSESSION
+
+# ---------- RabbitMQ ----------
+# ⚠️ 这两个凭据要和 config/docker-compose.env 里的 RABBITMQ_USERNAME / RABBITMQ_PASSWORD 一致，
+#    不一致就是"客户端 401 认证失败"（容器里创建的是 .env 那份）
+RABBITMQ_HOST: <your-vm-host-ip>
+RABBITMQ_PORT: 5672
+RABBITMQ_USERNAME: root
+RABBITMQ_PASSWORD: <your-password>
+RABBITMQ_VHOST: /
+
+# ---------- RocketMQ ----------
+# ⚠️ 三处必须一致：本文件、config/docker-compose.env、deploy/rocketmq/broker/conf/plain_acl.yml
+#    不一致的表现：AclException: No access key is configured / 认证失败
+ROCKETMQ_NAME_SERVER: <your-vm-host-ip>:9876
+ROCKETMQ_ACCESS_KEY: gulimall
+ROCKETMQ_SECRET_KEY: <your-password>
+
+# 支付宝沙箱支付配置
+ALIPAY_APP_ID: <your-alipay-app-id>
+ALIPAY_PRIVATE_KEY: <your-alipay-private-key>
+ALIPAY_PUBLIC_KEY: <your-alipay-public-key>
+ALIPAY_GATEWAY: https://openapi-sandbox.dl.alipaydev.com/gateway.do
+ALIPAY_NOTIFY_URL: https://pay.gulimall.vip/pay/notify
+ALIPAY_RETURN_URL: http://order.gulimall.vip/pay/return
+
+# ---------- AI / CloseAI（gulimall-agent） ----------
+AI_CLOSEAI_BASE_URL: https://api.openai-proxy.org/v1
+AI_CLOSEAI_API_KEY: <your-ai-api-key>
+# 自定义模型 apiKey 的 AES-GCM 主密钥：Base64 编码的 32 字节随机数
+# 生成示例：openssl rand -base64 32
+# 开发默认值，生产环境务必用 `openssl rand -base64 32` 重新生成并用环境变量覆盖
+AI_SETTINGS_AES_KEY: ${GULIMALL_AI_AES_KEY:<your-aes-key>}
+# 业务模块内部只读 AI 接口的共享密钥（agent 调 product/order 等）
+# 开发默认值，生产环境务必换掉；不配置时内部接口按 404 拒绝（fail closed）
+INTERNAL_API_TOKEN: ${GULIMALL_INTERNAL_API_TOKEN:<your-internal-api-token>}
+# 管理端 token 校验地址（renren-fast 的 context-path 是 /renren-fast）
+RENREN_FAST_URL: http://localhost:8080/renren-fast
+
+# ---------- 天气（阿里云市场 24 小时天气） ----------
+WEATHER_BASE_URL: https://jmweather.market.alicloudapi.com
+WEATHER_APP_CODE: <your-sms-app-code>
+
+# ---------- Milvus 向量库 ----------
+MILVUS_HOST: <your-vm-host-ip>
+MILVUS_PORT: 19530
+MILVUS_DATABASE: gulimall_ai
+MILVUS_COLLECTION: gulimall_knowledge_v1
+MILVUS_USERNAME: root
+# ⚠️ 必须与 config/docker-compose.env 的 MILVUS_ROOT_PASSWORD 完全一致
+MILVUS_PASSWORD: <your-password>
+
+# JWT
+# 是否只允许https访问cookie（生产环境务必 true，开发环境可 false）
+AGENT_JWT_COOKIE_SECURE: false
+# 用户端 JWT 私钥（签发方 auth-server 用）
+AGENT_JWT_USER_PRIVATE_KEY_PATH: jwt/user/jwt_private.pem
+# 用户端/管理端公钥（只有 agent 验签读取）
+AGENT_JWT_USER_PUBLIC_KEY_PATH: jwt/user/jwt_public.pem
+AGENT_JWT_ADMIN_PUBLIC_KEY_PATH: jwt/admin/jwt_public.pem
+
+# ---------- OpenFeign 超时（10 个业务模块都 import 了这个文件，一处生效） ----------
+# 默认 readTimeout 是 60 秒：下游一卡，调用方的请求线程就被吊住 60 秒。
+# 购物车那边更要短 —— 加购的远程调用在分布式锁里，会把锁一起占住
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 2000
+            read-timeout: 5000
+
+    # ---------- Nacos（注册中心 + 配置中心） ----------
+    # 所有模块共用。个别模块要单独指定 namespace / group 的，
+    # 在自己模块的 yaml 里补 spring.cloud.nacos.config.namespace 即可。
+    nacos:
+      # 统一配置：discovery（服务管理）与 config（配置管理）
+      # 服务管理 与 配置管理共同地址（也可以分别配置）
+      server-addr: ${NACOS_ADDR}
+      # Nacos 开启鉴权后，客户端登录必须使用这里的账号密码
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+      # 服务管理
+      discovery:
+        enabled: true
+        username: ${NACOS_USERNAME}
+        password: ${NACOS_PASSWORD}
+      # 配置管理
+      config:
+        enabled: true
+        username: ${NACOS_USERNAME}
+        password: ${NACOS_PASSWORD}
+
+  # ---------- RabbitMQ 连接信息 ----------
+  # 放在这里，用 MQ 的业务模块不用各配一遍。
+  # 只有引入了 spring-boot-starter-amqp 的模块才会真的去连它，没引的模块配了也不会连。
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST}
+
+    # 发送方可靠性：消息到底有没有进交换机/队列必须能知道，否则是"静默丢消息"
+    # 开启发送端消息抵达Broker确认
+    publisher-confirm-type: correlated
+    # 开启发送端消息抵达Queue确认
+    publisher-returns: true
+    # 只要消息抵达Queue，就会异步发送优先回调return firm
+    template:
+      mandatory: true
+
+    # 消费方（要不要手动 ack、失败重试几次、prefetch）建议写在【用 MQ 的模块自己的 application.yaml】里，因为每个业务的处理方式不一样，比如：
+    #   listener:
+    #     simple:
+    #       acknowledge-mode: manual   # 业务处理成功再 ack
+    #       prefetch: 1
+    #       retry:
+    #         enabled: true
+    #         max-attempts: 3
+
+  # ---------- Jackson 日期格式 ----------
+  # time-zone 必须写：Jackson 默认用 UTC 序列化 Date，
+  # 只配 date-format 的话返回的时间会比北京时间少 8 小时
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+  # ---------- Thymeleaf ----------
+  # 关闭缓存
+  thymeleaf:
+    cache: false
+
+  # ---------- 定时任务线程池 ----------
+  task:
+    scheduling:
+      pool:
+        size: 4                        # 默认 1，本项目 4 足够
+      thread-name-prefix: ${spring.application.name}-sched-
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s  # 停机时给正在跑的任务 30 秒收尾
+
+# ---------- RocketMQ 连接信息与 ACL 凭据 ----------
+# ⚠️ 前缀是【顶层 rocketmq】，不是 spring.rocketmq（和 RabbitMQ 的 spring.rabbitmq 不一样）。
+# 只有 pom 里引了 rocketmq-spring-boot-starter 的模块才会真的去连；
+# 没引 starter 的模块读到这段也不会有任何动作。
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER}
+
+  producer:
+    # 生产者组不能放公共配置：每个业务模块应该有自己的组名，
+    # 要发消息的模块在自己的 application.yaml 里补：
+    #   rocketmq:
+    #     producer:
+    #       group: gulimall-xxx-producer
+    access-key: ${ROCKETMQ_ACCESS_KEY}
+    secret-key: ${ROCKETMQ_SECRET_KEY}
+
+  consumer:
+    # 消费者组写在 @RocketMQMessageListener(consumerGroup = ...) 上，
+    # 这里只放公共的 ACL 凭据
+    access-key: ${ROCKETMQ_ACCESS_KEY}
+    secret-key: ${ROCKETMQ_SECRET_KEY}
+
+# ---------- 会话 cookie（跨子域共享登录态） ----------
+# 三个值取自本文件上面的 SESSION_*，对 gulimall.vip 及其所有子域生效
+server:
+  servlet:
+    session:
+      cookie:
+        domain: ${SESSION_COOKIE_DOMAIN}
+        name: ${SESSION_COOKIE_NAME}
+        http-only: true
+
+# ---------- MyBatis-Plus ----------
+mybatis-plus:
+  # classpath*表示自己和引入其他模块的mapper.xml都会扫描
+  mapper-locations: classpath*:/mapper/**/*.xml
+  # 全局配置
+  global-config:
+    db-config:
+      id-type: auto                    # 主键策略：自增（数据库自增）
+
+# ---------- 日志级别 ----------
+logging:
+  level:
+    com.atguigu.gulimall: debug
+
+# ---------- 各模块共用的业务配置 ----------
+gulimall:
+  # 线程池配置
+  threadpool:
+    core-pool-size: 20
+    max-pool-size: 200
+    keep-alive-time: 60
+    thread-name-prefix: ${spring.application.name}
+
+  # 商城前台首页地址
+  shop-home-url: https://gulimall.vip
+  # 商品详情页地址（秒杀页跳详情用）
+  item-url: https://gulimall.vip
+  # 秒杀页面地址（首页秒杀区跳转用）
+  seckill-url: https://seckill.gulimall.vip
+  # 个人中心地址
+  member-url: https://member.gulimall.vip
+  # 前端登录注册页面地址
+  auth-url: https://auth.gulimall.vip
+  # 商城购物车地址
+  cart-url: https://cart.gulimall.vip
+  # 订单列表/支付页地址
+  order-url: https://order.gulimall.vip
+
+  mq:
+    reliable:
+      # 可靠消息延迟发送：消息先落库，全局事务结束后再等这么久才投递。
+      # 必须大于全局事务超时时间（下面 seata.client.tm 配的 30 秒）。
+      send-delay-ms: 60000
+
+  ware:
+    stock-release:
+      # 下单后多久解锁库存（毫秒），默认 30 分钟；测试时可临时改成 30000
+      delay-ms: 1800000
+#      delay-ms: 30000
+      # 定时兜底的宽限期：比 MQ 延时再多等一会儿，让正常的延时消息先处理
+      grace-ms: 300000
+
+# ---------- Seata（分布式事务客户端） ----------
+# 只有引入 spring-cloud-starter-alibaba-seata 的模块（order / ware）会生效。
+# Seata 2.x 不再需要 registry.conf / file.conf，客户端配置全部写在这里。
+seata:
+  # 是否启用客户端；关掉后 @GlobalTransactional 退化成普通本地事务
+  enabled: true
+  # 本服务在 Seata 服务端眼里的名字，直接用微服务名即可
+  application-id: ${spring.application.name}
+  # 事务分组：客户端按它查 vgroup-mapping 找到 TC 集群；
+  # 必须与服务端 deploy/seata-config/application.yml 里的映射 key 一致
+  tx-service-group: gulimall_tx_group
+  # 自动用 DataSourceProxy 包装数据源（AT 模式的前提），不要手写代理 bean
+  enable-auto-data-source-proxy: true
+
+  client:
+    tm:
+      # 全局事务默认超时时间（毫秒）。
+      # 注解没写 timeoutMills（或写的是默认 60000）时使用这个值。
+      default-global-transaction-timeout: 30000
+
+  service:
+    # 事务分组 → TC 集群名 的映射；default 对应服务端 seata.registry.nacos.cluster
+    vgroup-mapping:
+      gulimall_tx_group: default
+
+  # 注册中心：客户端从这里发现 seata-server 的地址（替代旧的 registry.conf）
+  registry:
+    type: nacos
+    nacos:
+      # 服务端在 Nacos 里的服务名，必须与服务端配置一致
+      application: seata-server
+      # Nacos 地址（顶部 NACOS_ADDR）
+      server-addr: ${NACOS_ADDR}
+      # Nacos 分组 / 命名空间，需与服务端一致
+      group: DEFAULT_GROUP
+      namespace: ""
+      # 只连接这个集群的 TC，对应服务端 seata.registry.nacos.cluster
+      cluster: default
+      # Nacos 认证信息
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+
+  # 配置中心：file 表示不从配置中心拉 Seata 配置，直接用本文件的 seata.*（替代旧的 file.conf）
+  config:
+    type: file

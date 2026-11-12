@@ -1,0 +1,56 @@
+# ============================================================
+# gulimall-ware 模块私有配置（仓储 / gulimall_wms 库）
+# 共用部分见同目录 common.yaml
+# ============================================================
+
+# common中自定义鉴权配置
+#gulimall:
+#  shiro:
+#    enabled: true          # 开启拦截
+#    permissions: ware:purchase:list,ware:purchase:info   # 当前用户权限（逗号分隔）
+#    permission-all: true   # 开发期放行所有权限（可选）
+
+server:
+  port: 11000
+
+gulimall:
+  rabbitmq:
+    # 反序列化白名单：库存解锁消息体 StockReleaseMessage 所在的包
+    trusted-packages: com.atguigu.gulimall.ware.mq.message
+
+spring:
+  # RabbitMQ 消费端
+  # 共通模块的容器工厂会强制 manual ack，这里写出来是为了让配置一眼可见
+  rabbitmq:
+    listener:
+      simple:
+        acknowledge-mode: manual
+        # 库存解锁要更新 DB，消费者偏慢；prefetch 别太大，避免消息全堆在一个实例上
+        prefetch: 10
+
+  # Redis：库存缓存 + Redisson 分布式锁（锁的客户端要连 Redis）
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  datasource:
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    # 参数	                                    作用
+    # useUnicode=true&characterEncoding=UTF-8	防止中文乱码
+    # serverTimezone=Asia/Shanghai	            必须设置，否则报时区错误
+    # allowPublicKeyRetrieval=true	            必须设置，否则报公钥检索错误
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/gulimall_wms?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    # mysql8.0
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# ---------- 调用链：Micrometer Tracing + OTLP（Jaeger） ----------
+management:
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}

@@ -1,0 +1,5 @@
+com.atguigu.gulimall.common.config.ShiroConfig
+com.atguigu.gulimall.common.aspect.ControllerLogAutoConfiguration
+com.atguigu.gulimall.common.config.GlobalModelAdviceAutoConfiguration
+com.atguigu.gulimall.common.config.RedisCityAutoConfiguration
+com.atguigu.gulimall.common.config.CityAutoConfiguration

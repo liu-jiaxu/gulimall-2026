@@ -1,0 +1,110 @@
+# ============================================================
+# gulimall-product 模块私有配置（商品 / gulimall_pms 库）
+# 共用部分见同目录 common.yaml
+# ============================================================
+
+# common中自定义鉴权配置
+#gulimall:
+#  shiro:
+#    enabled: true          # 开启拦截
+#    permissions: product:brand:list,product:brand:save   # 当前用户权限（逗号分隔）
+#    permission-all: true   # 开发期放行所有权限（可选）
+
+server:
+  port: 10000
+
+  tomcat:
+    # 工作线程上限（默认 200）。
+    # ⚠️ 不用盲目调大：加了 L1 本地缓存后命中路径只要 ~1ms，线程周转极快，
+    #    200 线程的吞吐上限已在 10 万 QPS 量级，再调大收益很小、反而增加上下文切换成本。
+    #    真正的硬约束是下面的 max-connections（连接数），不是线程数。
+    threads:
+      max: 300             # 默认 200，小幅上调留点余量
+      min-spare: 50        # 默认 10：保持常驻线程，避免突发流量时现建（建线程是同步开销）
+    # 能同时建立的最大连接数（默认 8192）。目标是撑 10000 并发的话，
+    # 这一项必须 >= 10000，否则多出来的连接会被直接拒掉 —— 这才是本节的硬指标
+    max-connections: 10000
+    # 所有工作线程都忙时，还能排队的请求数（默认 100）。
+    # ⚠️ 队列不能太长：排进去的请求要一直干等到 connection-timeout 才报错，用户体感极差。
+    #    经验上别超过 threads.max
+    accept-count: 300
+    # 建立连接的超时（毫秒，默认 20000）
+    connection-timeout: 20000
+
+spring:
+  datasource:
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    # 参数	                                    作用
+    # useUnicode=true&characterEncoding=UTF-8	防止中文乱码
+    # serverTimezone=Asia/Shanghai	            必须设置，否则报时区错误
+    # allowPublicKeyRetrieval=true	            必须设置，否则报公钥检索错误
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/gulimall_pms?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    # mysql8.0
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+    # JMeter + arthas 性能测试后发现数据库连接池最大连接数过小，导致并发数据库访问出现等待
+    # 实际解决方案会 缓存@Cacheable(value = "category", key = "'all'") + Redis 一起解决，增大连接数并不是最优解
+#    hikari:
+#      maximum-pool-size: 50  # 建议值，需结合数据库服务器配置
+#      connection-timeout: 3000
+
+  # redis
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  session:
+    timeout: 7d
+    redis:
+      namespace: ${SESSION_REDIS_NAMESPACE}
+#      timeout: 3s
+#      # ↓↓↓ 以下 lettuce 配置已废弃，请勿取消注释 ↓↓↓
+#      # 原因一：redisson-spring-boot-starter 的 RedissonConnectionFactory 已接管 StringRedisTemplate，
+#      #         底层走的是 Redisson 而不是 Lettuce，配 lettuce.pool 一行都不会生效
+#      # 原因二：commons-pool2 也不在 classpath 上，Spring Boot 本来就不会应用这段配置
+#      # Redisson 的连接池大小、超时与重试，改在 MyRedissonConfig 里配
+#      # 设置lettuce-pool连接池最大处理数，防止一秒大量线程访问导致大网络IO出现Netty的堆外内存溢出
+#      lettuce:
+#        pool:
+#          max-active: 50
+#          max-idle: 50          # 改为与 max-active 一致
+#          min-idle: 10          # 适当提高，减少频繁创建
+#          max-wait: 2s
+#          time-between-eviction-runs: 60s    # 空闲检测周期
+
+  # 一级缓存 L1：进程内 Caffeine，挡在 Redis(L2) 前面
+  # 分类树属于"读极多、写极少"的字典数据，L1 命中率极高，命中时完全不产生网络 IO，
+  # 这是把 P99 压进 200ms 的关键 —— 让 Redis 读取退化成低频且无竞争的操作
+  # expireAfterWrite 取 5min：与 Redis 的 1 天 TTL 形成层级，L1 失效后仍由 Redis 兜底。
+  # 取 5min 而不是更短，是因为 sync=true 下 L1 过期时并发请求会集体阻塞等待一次重载，
+  # TTL 越短这种"集体等待"越频繁（30s 时实测每 30 秒就出现一次）。
+  # 代价是多实例部署时各节点 L1 有最长 5 分钟的不一致窗口，对分类这种几乎不变的字典数据可以接受。
+  #
+  # 注意：测试类 CategoryCacheEvictTest 用 application-test.yaml 把它压到 1s，
+  # 以便在几秒内验证"L1 过期 -> 从 L2 重新加载"的完整链路。
+  cache:
+    # 这里没用redis的cache缓存，因为redis的cache缓存还是存储进redis，caffeine的缓存在本地服务器
+    type: caffeine
+    caffeine:
+      spec: maximumSize=100,expireAfterWrite=5m
+
+mybatis-plus:
+  global-config:
+    db-config:
+      # 逻辑删除规则
+      logic-delete-value: 1            # 逻辑已删除值
+      logic-not-delete-value: 0        # 逻辑未删除值
+#      table-prefix: pms_               # 表名前缀（可选）
+#      field-strategy: not_null         # 字段策略：非空才更新
+
+# ---------- 调用链：Micrometer Tracing + OTLP（Jaeger） ----------
+management:
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}

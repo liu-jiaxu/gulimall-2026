@@ -1,0 +1,19 @@
+spring:
+  application:
+    # 服务名：Nacos 注册名、配置文件名都用它
+    name: gulimall-agent
+  config:
+    import:
+      # 1. Nacos 上的公共配置/说明，和本地配置同时存在时以本地为准
+      - optional:nacos:gulimall.yaml
+      # 2. 公共中间件凭据：MySQL/Redis/Nacos/MinIO/Milvus/AI key/Session
+      - optional:file:./config/common.yaml
+      # 3. 本模块私有配置：模型、图片、RAG、数据源、Session
+      - optional:file:./config/${spring.application.name}.yaml
+      # 4. 从模块目录启动时，上一级 config 作为兜底
+      - optional:file:../config/common.yaml
+      - optional:file:../config/${spring.application.name}.yaml
+
+server:
+  # AI 服务端口；网关/Nginx 都按这个端口转发
+  port: 15000

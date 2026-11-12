@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8">
+	<title>收银台 - 谷粒商城</title>
+	<link rel="stylesheet" href="/pay/css/style.css">
+	<script src="/pay/js/jquery-3.1.1.min.js" charset="utf-8"></script>
+</head>
+<body>
+<div class="One_Jdbox">
+	<div class="Jdbox_head">
+		<a th:href="${shopHomeUrl}"><img src="/pay/img/logo1.jpg" alt=""></a><span class="bank">收银台</span>
+		<ul>
+			<li th:if="${loginUser == null}">
+				<a th:href="|${authUrl}/login.html|">你好，请登录</a>
+				<a th:href="|${authUrl}/reg.html|">免费注册</a>
+			</li>
+			<li th:if="${loginUser != null}">
+				<span th:text="${loginUser.nickname != null ? loginUser.nickname : loginUser.username}">会员</span>
+				<a th:href="|${authUrl}/logout.html|">退出</a>
+			</li>
+			<li><a th:href="|${orderUrl}/list.html|">我的订单</a></li>
+			<li>支付帮助</li>
+		</ul>
+	</div>
+	<div class="Jdbox_BuySuc">
+		<dl>
+			<dt><img src="/pay/img/saoyisao.png" alt=""></dt>
+			<dd>
+				<span th:text="|订单提交成功，请尽快付款！订单号：${orderSn}|">订单提交成功，请尽快付款！订单号：</span>
+				<span>应付金额<font th:text="${#numbers.formatDecimal(payAmount, 1, 2)}">0.00</font>元</span>
+			</dd>
+			<dd>
+				<span>推荐使用</span>
+				<span>请在倒计时结束前完成支付，超时后锁定库存会自动释放</span>
+				<span>支付剩余时间：<font id="pay-countdown">--:--:--</font></span>
+				<span><a th:href="@{/detail.html(orderSn=${orderSn})}" style="color:inherit;text-decoration:none;">订单详细</a></span>
+			</dd>
+		</dl>
+	</div>
+	<div class="Jd_Con">
+		<p class="JdCon_title"><img src="/pay/img/title.png" alt=""></p>
+		<div class="Jd_Fenqi">
+			<ul>
+				<li><img src="/pay/img/BAITIAO_2.0.png" alt="">打白条</li>
+				<li>
+					<span>可用额度 7275.38元</span>
+					<span>白条还款日 <span th:text="${creditDueDate}">2026-11-19</span></span>
+					<span><font>优惠</font>随机立减(最高10元)</span>
+				</li>
+				<li>支付<font th:text="${#numbers.formatDecimal(payAmount, 1, 2)}">0.00</font>元</li>
+			</ul>
+			<ol>
+				<li>
+					<p>不分期</p>
+					<p>0服务费</p>
+				</li>
+				<li>
+					<p>3期</p>
+					<p><span th:text="${#numbers.formatDecimal(installment3, 1, 2)}">0.00</span>元/期</p>
+				</li>
+				<li>
+					<p>6期</p>
+					<p><span th:text="${#numbers.formatDecimal(installment6, 1, 2)}">0.00</span>元/期</p>
+				</li>
+				<li>
+					<p>12期</p>
+					<p><span th:text="${#numbers.formatDecimal(installment12, 1, 2)}">0.00</span>元/期</p>
+				</li>
+				<li>
+					<p>24期</p>
+					<p><span th:text="${#numbers.formatDecimal(installment24, 1, 2)}">0.00</span>元/期</p>
+				</li>
+			</ol>
+		</div>
+		<div class="Jd_main">
+			<ul>
+				<li>
+              <span>
+                <img src="/pay/img/XJKCONSUME.png" alt="">谷粒学院小金库
+              </span>
+					<span>未开通小金库</span>
+				</li>
+				<li>
+              <span>
+                <img src="/pay/img/CMB.png" alt="">招商银行
+              </span>
+					<span>信用卡(4337)</span>
+					<span><font>优惠</font>单单减最高99元</span>
+				</li>
+				<li>
+					<button>更多付款方式</button>
+					<button>添加新卡/网银支付</button>
+				</li>
+				<li>
+					<p>请输入6位数字支付密码</p>
+					<input type="password" maxlength="6" inputmode="numeric"><span>忘记支付密码？</span>
+				</li>
+				<li>
+					<button id="pay-now-btn">立即支付</button>
+					<button id="cancel-order-btn" style="margin-left:16px;background:#999;">取消订单</button>
+				</li>
+			</ul>
+		</div>
+	</div>
+	<div class="Jd_footer">
+		<ul>
+			<li>
+				<img src="/pay/img/weixin.png" alt="">微信支付
+			</li>
+			<!-- 点击支付宝图标和点“立即支付”一样，都会走 goAlipay() -->
+			<li id="alipay-pay-entry">
+				<img src="/pay/img/zhifubao.png" style="weight:auto;height:30px;" alt="">支付宝
+			</li>
+		</ul>
+	</div>
+	<div class="Jd_foots">
+		<p>
+			<span>Copyright @2004-2026 谷粒学院gulimall.com 版权所有</span>
+			<span>
+            <img src="/pay/img/foots.png" alt="">
+          </span>
+		</p>
+	</div>
+</div>
+    <!-- 谷粒商城 AI 助手：悬浮宠物 + 聊天窗 -->
+    <script src="/gulimall/agent/widget/chat-widget.js" defer></script>
+</body>
+<script type="text/javascript" th:inline="javascript">
+    //头部订单成功 订单详细鼠标移入效果
+    $(".Jdbox_BuySuc dl dd:last-child span:last-child").mouseover(function () {
+        $(this).css({"cursor": "pointer", "color": "#E31613"})
+    }).mouseout(function () {
+        $(this).css("color", "#7EA4FF")
+    })
+    //分期付款鼠标移入hover效果
+    $(".Jd_Fenqi>ol li:not(:first-child)").mouseover(function () {
+        $(this).css({"cursor": "pointer", "border": "1px solid #E31613"})
+    }).mouseout(function () {
+        $(this).css("border", "1px solid #C9DFFF")
+    })
+    //支付方式按钮选择hover效果
+    $(".Jd_main ul li:nth-child(3) button").mouseover(function () {
+        $(this).css({"cursor": "pointer", "color": "#E31613"})
+    }).mouseout(function () {
+        $(this).css("color", "#67A4FF")
+    })
+    //忘记密码鼠标移入效果
+    $(".Jd_main ul li:nth-child(4) span").mouseover(function () {
+        $(this).css({"cursor": "pointer", "color": "#E31613"})
+    }).mouseout(function () {
+        $(this).css("color", "#67A4FF")
+    })
+    //立即支付按钮效果
+    $("#pay-now-btn").mouseover(function () {
+        $(this).css({"cursor": "pointer", "background": "#FF5350"})
+    }).mouseout(function () {
+        $(this).css("background", "#FC6E6C")
+    })
+
+    $(".Jd_footer ul li").mouseover(function () {
+        $(this).css({"cursor": "pointer", "color": "#E31613"})
+    }).mouseout(function () {
+        $(this).css("color", "#5E5E5E")
+    })
+
+    $(".Jdbox_head>ul li span").mouseover(function () {
+        $(this).css({"cursor": "pointer", "color": "#E31613"})
+    }).mouseout(function () {
+        $(this).css("color", "#666666")
+    })
+    $(".Jdbox_head>ul li:not(:first-child)").mouseover(function () {
+        $(this).css({"cursor": "pointer", "color": "#E31613"})
+    }).mouseout(function () {
+        $(this).css("color", "#666666")
+    })
+
+
+    $(".Jd_Fenqi ul li:first-child").mouseover(function () {
+        $(this).css({"cursor": "pointer", "color": "#666666"})
+    }).mouseout(function () {
+        $(this).css({"color": "black"})
+    })
+
+    // 支付宝支付统一入口：把订单号交给后端，后端返回自动提交表单
+    function goAlipay() {
+        window.location.href = "/pay/alipay?orderSn=" + encodeURIComponent(orderSn);
+    }
+
+    // “立即支付”按钮和底部的“支付宝”图标都走同一个入口
+    $("#pay-now-btn").click(goAlipay);
+    $("#alipay-pay-entry").click(goAlipay);
+
+    // 支付倒计时：服务端按订单创建时间 + delay-ms 算好剩余秒数
+    var orderSn = /*[[${orderSn}]]*/ '';
+    var payRemainingSeconds = /*[[${payRemainingSeconds}]]*/ 0;
+    var orderPageUrl = /*[[${orderUrl}]]*/ '';
+    var countdownDeadline = Date.now() + payRemainingSeconds * 1000;
+    var countdownTimer;
+
+    function formatCountdown(totalSeconds) {
+        var hours = Math.floor(totalSeconds / 3600);
+        var minutes = Math.floor((totalSeconds % 3600) / 60);
+        var seconds = totalSeconds % 60;
+        return [hours, minutes, seconds].map(function (n) {
+            return n < 10 ? "0" + n : "" + n;
+        }).join(":");
+    }
+
+    function tickCountdown() {
+        var remaining = Math.max(0, Math.ceil((countdownDeadline - Date.now()) / 1000));
+        $("#pay-countdown").text(formatCountdown(remaining));
+        if (remaining <= 0) {
+            clearInterval(countdownTimer);
+            alert("支付超时，锁定库存将自动释放，即将跳转到订单页面");
+            window.location.href = orderPageUrl + "/list.html";
+        }
+    }
+
+    countdownTimer = setInterval(tickCountdown, 1000);
+    tickCountdown();
+
+    // 取消订单：关闭订单并释放锁定库存，成功后回订单列表
+    $("#cancel-order-btn").click(function () {
+        if (!confirm("确定取消该订单？取消后锁定库存会释放。")) {
+            return;
+        }
+        $.post("/pay/cancel", {orderSn: orderSn}, function (res) {
+            if (res && res.code === 0) {
+                alert("订单已取消");
+                window.location.href = orderPageUrl + "/list.html";
+            } else {
+                alert((res && res.msg) ? res.msg : "取消失败，请稍后重试");
+            }
+        }).fail(function () {
+            alert("取消失败，请稍后重试");
+        });
+    });
+</script>
+</html>

@@ -1,0 +1,45 @@
+digraph recovery {
+    rankdir=TB;
+    bgcolor="white";
+    splines=polyline;
+    nodesep=0.35;
+    ranksep=0.42;
+
+    node [shape=box, style="filled,rounded", fillcolor="#e7f3ff", color="#3d7eb8",
+          fontname="Microsoft YaHei", fontsize=11, margin="0.18,0.10"];
+    edge [color="#5a5a5a", arrowsize=0.8, penwidth=1.1, fontname="Microsoft YaHei", fontsize=9];
+
+    subgraph cluster_fallback {
+        label="① 定时兜底（MQ 丢消息 / 消费一直失败）";
+        style="filled,dashed"; fillcolor="#fff8f8"; color="#dc3545";
+        fontname="Microsoft YaHei"; fontsize=11;
+        A1 [label="StockReleaseTask.releaseExpiredTasks()\n@Scheduled 每分钟", fillcolor="#ffe8cc", color="#fd7e14", penwidth=2];
+        A2 [label="查询 wms_ware_order_task\nWHERE task_status=1\nAND create_time <= now - 30min - 5min"];
+        A3 [label="StockReleaseExecutor.release(taskId)\n→ releaseStock（同 flow3）"];
+        A4 [label="解锁 DB stock_locked\n+ Redis INCRBY"];
+        A1 -> A2 -> A3 -> A4;
+    }
+
+    subgraph cluster_pay {
+        label="② 支付成功（非 MQ）";
+        style="filled,dashed"; fillcolor="#f0fff4"; color="#28a745";
+        fontname="Microsoft YaHei"; fontsize=11;
+        B1 [label="order 调用\nPOST /ware/waresku/markPaid?orderSn=xxx", fillcolor="#d4edda", color="#28a745", penwidth=2];
+        B2 [label="WareSkuServiceImpl.deductLockedStock(orderSn)"];
+        B3 [label="task_status 1 → 3\n明细 lock_status 1 → 3"];
+        B4 [label="DB stock - n、stock_locked - n\n可用库存不变；Redis 不再动", fillcolor="#fff3cd", color="#ffc107"];
+        B1 -> B2 -> B3 -> B4;
+    }
+
+    subgraph cluster_replay {
+        label="③ 人工重放死信";
+        style="filled,dashed"; fillcolor="#f0f7ff"; color="#3d7eb8";
+        fontname="Microsoft YaHei"; fontsize=11;
+        C1 [label="MqDeadMessageService.replayAll()", fillcolor="#ffe8cc", color="#fd7e14", penwidth=2];
+        C2 [label="逐条 replay：\n清 mq_retry_count / mq_fail_reason /\nmq_origin_* / x-delay\n补 contentType"];
+        C3 [label="rabbitTemplate.send(原交换机, 原 routingKey)\n不走 convertAndSend"];
+        C4 [label="回到业务队列\nStockReleaseListener 重新消费"];
+        C5 [label="成功 → removeById 删除死信记录"];
+        C1 -> C2 -> C3 -> C4 -> C5;
+    }
+}

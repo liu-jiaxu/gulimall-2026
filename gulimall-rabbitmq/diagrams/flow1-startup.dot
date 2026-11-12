@@ -1,0 +1,69 @@
+digraph startup {
+    rankdir=TB;
+    bgcolor="white";
+    splines=ortho;
+    nodesep=0.35;
+    ranksep=0.45;
+
+    node [shape=box, style="filled,rounded", fillcolor="#e7f3ff", color="#3d7eb8",
+          fontname="Microsoft YaHei", fontsize=11, margin="0.18,0.10"];
+    edge [color="#5a5a5a", arrowsize=0.8, penwidth=1.1, fontname="Microsoft YaHei", fontsize=9];
+
+    S  [label="GulimallWareApplication.main()\n（业务应用启动）", fillcolor="#d4edda", color="#28a745", penwidth=2];
+    S1 [label="SpringApplication.run()", fillcolor="#d4edda", color="#28a745"];
+    A0 [label="读取 META-INF/spring/\norg.springframework.boot.autoconfigure.AutoConfiguration.imports"];
+    A1 [label="RabbitMqAutoConfiguration\n@AutoConfiguration(before = RabbitAutoConfiguration)", fillcolor="#fff3cd", color="#ffc107"];
+
+    S -> S1 -> A0 -> A1;
+
+    subgraph cluster_auto {
+        label="① 自动配置";
+        style="filled,dashed"; fillcolor="#f5f5f5"; color="#adb5bd";
+        fontname="Microsoft YaHei"; fontsize=11;
+
+        B1 [label="@EnableScheduling\n启动补偿定时任务"];
+        B2 [label="@MapperScan\nMqMessageDao / MqDeadMessageDao"];
+        B3 [label="@Import 配置类和服务"];
+        B4 [label="Spring Boot AMQP 自动配置\n提供 @RabbitListener 基础设施", shape=note, fillcolor="#fff3cd", color="#ffc107"];
+    }
+    A1 -> B1; A1 -> B2; A1 -> B3; A1 -> B4 [style=dashed];
+
+    subgraph cluster_config {
+        label="② 配置与基础设施 Bean";
+        style="filled,dashed"; fillcolor="#f0f7ff"; color="#3d7eb8";
+        fontname="Microsoft YaHei"; fontsize=11;
+
+        C1 [label="RabbitConverterConfig.messageConverter()\nJackson2JsonMessageConverter\n+ trusted-packages 白名单", fillcolor="#fff3cd", color="#ffc107"];
+        C2 [label="RabbitQueueConfig.retryExchange()\nCustomExchange：x-delayed-message"];
+        C3 [label="RabbitQueueConfig.deadExchange()/deadQueue()/deadBinding()\ngulimall-rabbitmq-dead-exchange / queue"];
+        C4 [label="RabbitQueueConfig.stockExchange()/stockReleaseQueue()\nstockReleaseBinding()/stockReleaseRetryBinding()\ngulimall-stock-exchange / gulimall-stock-release-queue"];
+        C5 [label="RabbitListenerContainerConfig\nrabbitListenerContainerFactory()\nAcknowledgeMode.MANUAL", fillcolor="#fff3cd", color="#ffc107"];
+        C6 [label="RabbitCallbackConfig.initRabbitTemplate()\nsetConfirmCallback / setReturnsCallback"];
+    }
+    B3 -> C1 -> C2 -> C3 -> C4 -> C5 -> C6;
+
+    subgraph cluster_service {
+        label="③ 服务与组件";
+        style="filled,dashed"; fillcolor="#f0fff4"; color="#28a745";
+        fontname="Microsoft YaHei"; fontsize=11;
+
+        D1 [label="MqMessageServiceImpl\n本地消息表"];
+        D2 [label="MqDeadMessageServiceImpl\n死信归档 + 人工重放"];
+        D3 [label="MqRetryServiceImpl\n消费失败重试"];
+        D4 [label="MqMessageCompensateTask\n每分钟补偿"];
+        D5 [label="MqDeadMessageListener\n死信归档消费者"];
+    }
+    C6 -> D1 -> D2 -> D3 -> D4 -> D5;
+
+    subgraph cluster_run {
+        label="④ 启动期动作";
+        style="filled,dashed"; fillcolor="#fff8f8"; color="#dc3545";
+        fontname="Microsoft YaHei"; fontsize=11;
+
+        E1 [label="RabbitAdmin 声明所有 Declarable\n交换机 / 队列 / 绑定"];
+        E2 [label="RabbitListenerEndpointRegistry.start()\nStockReleaseListener → gulimall-stock-release-queue\nMqDeadMessageListener → gulimall-rabbitmq-dead-queue"];
+        E3 [label="MqMessageCompensateTask.resend()\n每分钟第 0 秒"];
+        E4 [label="启动完成，等待消息", fillcolor="#d4edda", color="#28a745", penwidth=2];
+    }
+    D5 -> E1 -> E2 -> E3 -> E4;
+}
